@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, FileText, HardHat, Boxes, Users2, Wallet, BarChart3,
-  ShieldCheck, Inbox, DatabaseZap, Menu, X, Plus, ChevronRight, Search,
+  ShieldCheck, Inbox, DatabaseZap, Menu, X, Plus, ChevronRight, Search, ScrollText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
@@ -86,6 +86,7 @@ export const NAV: NavSection[] = [
         ],
       },
       { href: '/admin/access-requests', label: 'Access requests', icon: Inbox, admin: true },
+      { href: '/admin/audit', label: 'Audit log', icon: ScrollText, admin: true },
       { href: '/admin/import', label: 'Data import', icon: DatabaseZap, admin: true },
     ],
   },
@@ -116,7 +117,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   suppliers: 'Suppliers', purchases: 'Purchases', movements: 'Stock movements', reorder: 'Reorder alerts',
   'work-completion': 'Work completion', activity: 'Activity', clients: 'Clients', finance: 'Finance',
   analytics: 'Analytics', users: 'Team & access', permissions: 'Access overview', admin: 'Admin',
-  'access-requests': 'Access requests', import: 'Data import', design: 'Design system',
+  'access-requests': 'Access requests', import: 'Data import', audit: 'Audit log', design: 'Design system',
 }
 
 function breadcrumbs(pathname: string) {

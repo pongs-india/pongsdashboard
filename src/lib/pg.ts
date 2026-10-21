@@ -1,4 +1,5 @@
 import postgres from 'postgres'
+import { currentActor } from './actor'
 
 // Thin adapter over Supabase Postgres that keeps the `execute(sql, args)` →
 // `{ rows }` shape the app was written against (libsql/Turso). Queries are
@@ -75,6 +76,7 @@ function connection(): Sql {
 }
 
 const CREATE_TABLE = /^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)/i
+const WRITE = /^\s*(INSERT|UPDATE|DELETE)\b/i
 
 // A query that has not answered in this long is stuck (stalled pooler
 // session, dropped socket). The pool is thrown away and rebuilt so one bad
@@ -100,7 +102,18 @@ export const db: DbClient = {
     })
     // One query per connection at a time: no pipelining through the
     // transaction pooler, which can mis-route pipelined statements.
+    // Writes made for a signed-in user run in a short transaction tagged with
+    // who, from where and on what device; the audit triggers record it.
+    const actor = WRITE.test(sql) ? currentActor() : null
     const run = (async () => {
+      if (actor) {
+        const result = await conn.begin(async tx => {
+          await tx.unsafe(`select set_config('app.actor', $1, true), set_config('app.ip', $2, true), set_config('app.ua', $3, true)`,
+            [actor.actor, actor.ip ?? '', (actor.ua ?? '').slice(0, 400)])
+          return tx.unsafe(toPostgres(sql), params as (string | number | null)[])
+        })
+        return { rows: Array.from(result) as Row[], rowsAffected: result.count ?? 0 }
+      }
       const reserved = await conn.reserve()
       try {
         const result = await reserved.unsafe(toPostgres(sql), params as (string | number | null)[])

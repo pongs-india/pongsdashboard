@@ -17,7 +17,7 @@ function getClient() {
 // SCHEMA_VERSION, not on every cold start: each server instance does a single
 // version check and every init* call shares that one promise.
 // Bump SCHEMA_VERSION whenever a migrate* function changes.
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 3
 
 let _schema: Promise<void> | null = null
 
@@ -25,12 +25,31 @@ export function ensureSchema(force = false): Promise<void> {
   if (force) _schema = null
   _schema ??= (async () => {
     const db = getClient()
-    if (!force) {
+    const current = async () => {
       try {
         const r = await db.execute('SELECT version FROM app_schema WHERE id = 1')
-        if (Number(r.rows[0]?.version ?? 0) >= SCHEMA_VERSION) return
-      } catch { /* table missing: fresh database */ }
+        return Number(r.rows[0]?.version ?? 0) >= SCHEMA_VERSION
+      } catch { return false /* table missing: fresh database */ }
     }
+    if (!force && await current()) return
+    try {
+      await runMigrations()
+    } catch (e) {
+      // Right after a deploy several server instances can start at once and
+      // migrate together. If another one finished first, that is success;
+      // otherwise try once more now that the race has passed.
+      await new Promise(r => setTimeout(r, 1500))
+      if (await current()) return
+      console.error('Schema migration failed once, retrying', e)
+      await runMigrations()
+    }
+  })().catch(e => { _schema = null; throw e })
+  return _schema
+}
+
+async function runMigrations() {
+  const db = getClient()
+  {
     await migrateInventoryTables()
     await migrateAuthTables()
     await migrateQuotesTable()
@@ -39,14 +58,84 @@ export function ensureSchema(force = false): Promise<void> {
     await migrateClientsTable()
     await migratePaymentsTable()
     await migrateFollowupsTable()
+    await migrateAuditLog()
     await db.execute('CREATE TABLE IF NOT EXISTS app_schema (id INTEGER PRIMARY KEY, version INTEGER NOT NULL, migrated_at TEXT)')
     await db.execute(
       `INSERT INTO app_schema (id, version, migrated_at) VALUES (1, ?, ?)
        ON CONFLICT (id) DO UPDATE SET version = excluded.version, migrated_at = excluded.migrated_at`,
       [SCHEMA_VERSION, new Date().toISOString()],
     )
-  })().catch(e => { _schema = null; throw e })
-  return _schema
+  }
+}
+
+// Change history for every business table, recorded by the database itself so
+// no write path can skip it. The app tags each write transaction with the
+// signed-in user, IP address and device (lib/actor.ts); changes made outside the
+// app (SQL editor, scripts) are recorded as 'system'. Password hashes are never
+// copied into the log.
+export const AUDITED_EXCLUDE = ['audit_log', 'auth_sessions', 'user_activity_log', 'app_schema']
+
+async function migrateAuditLog() {
+  const db = getClient()
+  await db.execute(`CREATE TABLE IF NOT EXISTS audit_log (
+    id bigserial primary key,
+    at timestamptz not null default now(),
+    txid bigint not null default txid_current(),
+    actor text not null,
+    ip text,
+    user_agent text,
+    table_name text not null,
+    row_pk text not null,
+    action text not null check (action in ('insert', 'update', 'delete')),
+    old_data jsonb,
+    new_data jsonb,
+    restored_at timestamptz,
+    restored_by text
+  )`)
+  // The record's own name (quote number, client, product…) from the full row,
+  // so an edit that did not touch the name still says which record it was.
+  await db.execute(`alter table audit_log add column if not exists label text`)
+  await db.execute(`create index if not exists audit_log_at on audit_log (at desc)`)
+  await db.execute(`create index if not exists audit_log_table_pk on audit_log (table_name, row_pk, at desc)`)
+  await db.execute(`create index if not exists audit_log_actor on audit_log (actor, at desc)`)
+  await db.execute(`create or replace function audit_row() returns trigger language plpgsql as $fn$
+    declare
+      who text := coalesce(nullif(current_setting('app.actor', true), ''), 'system');
+      ip text := nullif(current_setting('app.ip', true), '');
+      ua text := nullif(current_setting('app.ua', true), '');
+      o jsonb; n jsonb; od jsonb; nd jsonb; f jsonb; lbl text;
+    begin
+      if tg_op <> 'INSERT' then o := to_jsonb(old) - 'password_hash'; end if;
+      if tg_op <> 'DELETE' then n := to_jsonb(new) - 'password_hash'; end if;
+      f := coalesce(n, o);
+      lbl := coalesce(f ->> 'quote_number', f ->> 'purchase_number', f ->> 'name', f ->> 'project_name', f ->> 'product_name',
+                      f ->> 'item', f ->> 'description', f ->> 'note', f ->> 'client_name', f ->> 'email');
+      if lbl is not null and (f ->> 'client_name') is not null and lbl <> (f ->> 'client_name') then lbl := lbl || ' · ' || (f ->> 'client_name'); end if;
+      if tg_op = 'INSERT' then
+        insert into audit_log (actor, ip, user_agent, table_name, row_pk, action, new_data, label)
+          values (who, ip, ua, tg_table_name, coalesce(n ->> 'id', ''), 'insert', n, lbl);
+      elsif tg_op = 'DELETE' then
+        insert into audit_log (actor, ip, user_agent, table_name, row_pk, action, old_data, label)
+          values (who, ip, ua, tg_table_name, coalesce(o ->> 'id', ''), 'delete', o, lbl);
+      else
+        select jsonb_object_agg(k, o -> k), jsonb_object_agg(k, n -> k) into od, nd
+          from jsonb_object_keys(n) k
+          where (o -> k) is distinct from (n -> k) and k not in ('updated_at');
+        if od is null then return null; end if;
+        insert into audit_log (actor, ip, user_agent, table_name, row_pk, action, old_data, new_data, label)
+          values (who, ip, ua, tg_table_name, coalesce(n ->> 'id', ''), 'update', od, nd, lbl);
+      end if;
+      return null;
+    end $fn$`)
+  // Attach to every table except the logs and sessions themselves.
+  const tables = await db.execute(
+    `select c.relname as t from pg_class c join pg_namespace s on s.oid = c.relnamespace
+     where s.nspname = 'public' and c.relkind = 'r'`)
+  for (const r of tables.rows) {
+    const t = String(r.t)
+    if (AUDITED_EXCLUDE.includes(t) || !/^[a-z_][a-z0-9_]*$/.test(t)) continue
+    await db.execute(`create or replace trigger audit after insert or update or delete on ${t} for each row execute function audit_row()`)
+  }
 }
 
 // Kept as the public API every route already calls.

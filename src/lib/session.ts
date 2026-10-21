@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { dbGetSession } from './db'
+import { rememberActor } from './actor'
 import {
   parsePermissions,
   permitted,
@@ -45,6 +46,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const permissions = isAdmin
     ? fullPermissions()
     : parsePermissions(session.permissions_json)
+
+  rememberActor(sessionId, String(session.name ?? ''), email)
 
   return {
     userId: String(session.user_id),
