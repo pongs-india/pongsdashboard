@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { BarChart3 } from 'lucide-react'
 import Gate from '@/components/Gate'
 import { PageHeader, Stat, StatGrid, EmptyState, PageLoading, statusDot, humanize } from '@/components/ui'
-import { ChartCard, ChartEmpty, ChartTooltip, CHART_PRIMARY, AXIS_TICK, GRID_STROKE, BAR_MAX, BAR_RADIUS, BAR_RADIUS_H, compactINR, fullINR } from '@/components/charts'
+import { ChartCard, ChartEmpty, ChartTooltip, CHART_PRIMARY, AXIS_TICK, GRID_STROKE, CURSOR_FILL, BAR_MAX, BAR_RADIUS, BAR_RADIUS_H, compactINR, fullINR } from '@/components/charts'
 import { PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
 import { fmtINR, fmtDate } from '@/lib/format'
 
@@ -76,7 +76,7 @@ function AnalyticsInner() {
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} />
                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} width={52} />
-                <Tooltip cursor={{ fill: '#f1f1ef' }} content={<ChartTooltip />} />
+                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip />} />
                 <Bar dataKey="value" name="Quoted value" fill={CHART_PRIMARY} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
               </BarChart>
             </ResponsiveContainer>
@@ -91,7 +91,7 @@ function AnalyticsInner() {
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} />
                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                <Tooltip cursor={{ fill: '#f1f1ef' }} content={<ChartTooltip format={v => `${v} quote${v === 1 ? '' : 's'}`} />} />
+                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip format={v => `${v} quote${v === 1 ? '' : 's'}`} />} />
                 <Bar dataKey="count" name="Quotes" fill={CHART_PRIMARY} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
               </BarChart>
             </ResponsiveContainer>
@@ -188,7 +188,7 @@ function AnalyticsInner() {
                 <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
                 <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} />
                 <YAxis type="category" dataKey="cat" tick={AXIS_TICK} axisLine={false} tickLine={false} width={110} />
-                <Tooltip cursor={{ fill: '#f1f1ef' }} content={<ChartTooltip />} />
+                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip />} />
                 <Bar dataKey="val" name="Spend" fill={CHART_PRIMARY} radius={BAR_RADIUS_H} maxBarSize={BAR_MAX} />
               </BarChart>
             </ResponsiveContainer>

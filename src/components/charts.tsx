@@ -1,13 +1,13 @@
 'use client'
 import { useState, type ReactNode } from 'react'
 
-// Chart conventions shared by every chart in the product. Charts are single
-// series in the brand colour (brand-600), so data reads as part of the same
-// restrained palette as the rest of the UI.
-export const CHART_PRIMARY = '#1f6d52'
-
-export const AXIS_TICK = { fontSize: 11, fill: '#76766f' }
-export const GRID_STROKE = '#ececea'
+// Chart conventions shared by every chart in the product. Values mirror the
+// design tokens (replica/design/tokens.json): single series in the accent,
+// axis labels in the muted-text role, hairline grid in the border role.
+export const CHART_PRIMARY = '#2459d8'
+export const AXIS_TICK = { fontSize: 11, fill: '#5d6571' }
+export const GRID_STROKE = '#e2e5ea'
+export const CURSOR_FILL = '#f0f2f5'
 export const BAR_MAX = 24
 export const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0]
 export const BAR_RADIUS_H: [number, number, number, number] = [0, 4, 4, 0]
@@ -72,9 +72,9 @@ export function ChartCard({ title, description, table, children, actions, classN
         <div className="flex items-center gap-2 shrink-0">
           {actions}
           {table && (
-            <div className="segmented" role="tablist" aria-label="View">
-              <button data-active={view === 'chart'} onClick={() => setView('chart')}>Chart</button>
-              <button data-active={view === 'table'} onClick={() => setView('table')}>Table</button>
+            <div className="segmented" role="group" aria-label="View as">
+              <button type="button" aria-pressed={view === 'chart'} data-active={view === 'chart'} onClick={() => setView('chart')}>Chart</button>
+              <button type="button" aria-pressed={view === 'table'} data-active={view === 'table'} onClick={() => setView('table')}>Table</button>
             </div>
           )}
         </div>
