@@ -1,4 +1,5 @@
 'use client'
+import DocumentTitle from '@/components/DocumentTitle'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Pencil, Plus, Trash2, FileText, Receipt, Wallet, MessageSquare, HardHat, Play, CheckCircle2, ReceiptText, RotateCcw, ListChecks, UserPlus } from 'lucide-react'
@@ -168,6 +169,7 @@ export default function ProjectDetailPage() {
             <StatusBadge status={project.status} label={PROJECT_STATUS_LABELS[project.status]} />
             {['urgent', 'high'].includes(project.priority) && <Badge tone={project.priority === 'urgent' ? 'danger' : 'warning'}>{cap(project.priority)} priority</Badge>}
           </div>
+          <DocumentTitle title={String(project.name)} />
           <h1 className="mt-2 text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900">{project.name}</h1>
           <p className="mt-1 text-[13px] text-gray-500">
             {[project.client_name, project.city, project.scheduled_date ? `Scheduled ${fmtDate(project.scheduled_date)}` : null].filter(Boolean).join(' · ')}

@@ -2,6 +2,7 @@ import type { ReactNode, InputHTMLAttributes } from 'react'
 import { Search } from 'lucide-react'
 export { Modal } from '@/components/Modal'
 import type { LucideIcon } from 'lucide-react'
+import DocumentTitle from '@/components/DocumentTitle'
 
 // Shared presentation primitives. Every page composes these so headings,
 // metrics, statuses and empty states look and behave the same everywhere.
@@ -19,6 +20,7 @@ export function PageHeader({
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+      {typeof title === 'string' && <DocumentTitle title={title} />}
       <div className="min-w-0">
         <h1 className="text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900 truncate">{title}</h1>
         {description && <p className="mt-1 text-[13px] text-gray-500">{description}</p>}

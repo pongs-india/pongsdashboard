@@ -1,4 +1,5 @@
 'use client'
+import DocumentTitle from '@/components/DocumentTitle'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Pencil, FileText, HardHat, Users2, Plus } from 'lucide-react'
@@ -60,6 +61,7 @@ export default function ClientDetailPage() {
           <Avatar name={display} size={48} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <DocumentTitle title={String(display)} />
               <h1 className="text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900">{display}</h1>
               <Badge tone={STATUS_TONE[client.status] ?? 'neutral'}>{CLIENT_STATUS_LABEL[client.status] ?? client.status}</Badge>
             </div>
