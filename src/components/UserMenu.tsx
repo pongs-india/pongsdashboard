@@ -4,7 +4,7 @@ import { useMe, resetMe } from '@/lib/useMe'
 import { ChevronsUpDown, KeyRound, LogOut, Inbox, ShieldCheck } from 'lucide-react'
 import { Avatar, Badge, Field, Modal } from '@/components/ui'
 
-export default function UserMenu() {
+export default function UserMenu({ dark = false }: { dark?: boolean }) {
   const { me: user, loading } = useMe()
   const [open, setOpen] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
@@ -27,8 +27,8 @@ export default function UserMenu() {
   if (loading) {
     return (
       <div className="flex items-center gap-2.5 px-2 py-1.5" aria-hidden>
-        <span className="skeleton h-7 w-7 !rounded-full" />
-        <span className="flex-1 space-y-1.5"><span className="skeleton block h-2.5 w-24" /><span className="skeleton block h-2 w-32" /></span>
+        <span className={`h-7 w-7 rounded-full ${dark ? 'bg-white/10' : 'skeleton'}`} />
+        <span className="flex-1 space-y-1.5"><span className={`block h-2.5 w-24 rounded ${dark ? 'bg-white/10' : 'skeleton'}`} /><span className={`block h-2 w-32 rounded ${dark ? 'bg-white/10' : 'skeleton'}`} /></span>
       </div>
     )
   }
@@ -41,13 +41,13 @@ export default function UserMenu() {
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
-        className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-100 transition-colors">
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${dark ? 'hover:bg-white/[0.07]' : 'hover:bg-hover'}`}>
         <Avatar name={user.name} size={28} />
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-[13px] font-medium text-gray-900">{user.name}</span>
-          <span className="block truncate text-2xs text-gray-500">{user.email}</span>
+          <span className={`block truncate text-[13px] font-medium ${dark ? 'text-white' : 'text-ink'}`}>{user.name}</span>
+          <span className={`block truncate text-[11px] ${dark ? 'text-zinc-400' : 'text-faint'}`}>{user.email}</span>
         </span>
-        <ChevronsUpDown size={14} className="shrink-0 text-gray-400" />
+        <ChevronsUpDown size={14} className={`shrink-0 ${dark ? 'text-zinc-500' : 'text-faint'}`} />
       </button>
 
       {open && (

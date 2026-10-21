@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -11,6 +11,7 @@ import type { LucideIcon } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import UserMenu from '@/components/UserMenu'
 import CommandMenu, { openCommandMenu } from '@/components/CommandMenu'
+import NavProgress from '@/components/NavProgress'
 import { useMe, can } from '@/lib/useMe'
 import { NAVIGATE_EVENT } from '@/lib/navigate'
 import type { ModuleName } from '@/lib/permissions'
@@ -187,53 +188,57 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const crumbs = breadcrumbs(pathname)
   const canQuote = can(me, 'quotes', 'create')
 
+  // Brand-coloured sidebar (Pongs ink) with the white wordmark. Group labels
+  // are quiet; the active item is the only bright row.
   const sidebar = (
     <div className="flex h-full flex-col">
-      <div className="flex h-[var(--topbar-h)] shrink-0 items-center px-4">
-        <Link href="/" className="inline-flex items-center rounded focus-visible:outline-offset-4" aria-label="Pongs India home">
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-white/10 px-5">
+        <Link href="/" className="inline-flex items-center rounded focus-visible:outline-white focus-visible:outline-offset-4" aria-label="Pongs India home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/pongs-logo.png" alt="Pongs India" width={67} height={28} className="h-7 w-auto" />
+          <img src="/pongs-logo-white.png" alt="Pongs India" width={67} height={28} className="h-7 w-auto" />
         </Link>
+        <span className="ml-auto text-[11px] font-medium text-zinc-400">Operations</span>
       </div>
 
-      <div className="px-3 pb-2">
+      <div className="px-3 pt-3 pb-1">
         <button type="button" onClick={openCommandMenu}
-          className="flex h-8 w-full items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 text-[13px] text-gray-500 transition-colors hover:border-gray-300 hover:bg-white">
-          <Search size={14} className="shrink-0 text-gray-400" />
+          className="flex h-8 w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[13px] text-zinc-300 transition-colors hover:bg-white/10 hover:text-white">
+          <Search size={14} className="shrink-0 text-zinc-400" />
           <span className="flex-1 text-left">Search…</span>
-          <kbd className="kbd">⌘K</kbd>
+          <kbd className="inline-flex h-5 items-center rounded border border-white/15 px-1 text-[11px] font-medium text-zinc-400">⌘K</kbd>
         </button>
       </div>
 
-      <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4 pt-1 space-y-4">
+      <nav aria-label="Main" className="scroll-on-brand flex-1 overflow-y-auto px-3 py-3">
         {meLoading ? (
-          <div className="space-y-2 px-2 pt-1" aria-hidden>
+          <div className="space-y-2.5 px-2 pt-1" aria-hidden>
             {[64, 48, 56, 72, 52, 60, 44].map((w, i) => (
-              <div key={i} className="flex h-6 items-center gap-2.5"><span className="skeleton h-4 w-4" /><span className="skeleton h-3" style={{ width: w }} /></div>
+              <div key={i} className="flex h-6 items-center gap-2.5"><span className="h-4 w-4 rounded bg-white/10" /><span className="h-3 rounded bg-white/10" style={{ width: w }} /></div>
             ))}
           </div>
         ) : sections.map((s, i) => <NavGroup key={i} title={s.title} items={s.items} pathname={pathname} />)}
       </nav>
 
-      <div className="shrink-0 border-t border-gray-200 p-2">
-        <UserMenu />
+      <div className="shrink-0 border-t border-white/10 p-2">
+        <UserMenu dark />
       </div>
     </div>
   )
 
   return (
     <div className="min-h-screen">
+      <Suspense fallback={null}><NavProgress /></Suspense>
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] btn-secondary">Skip to content</a>
 
-      <aside className="app-sidebar hidden lg:block fixed inset-y-0 left-0 z-40 w-[var(--sidebar-w)] border-r border-gray-200 bg-white">
+      <aside className="app-sidebar no-print hidden lg:block fixed inset-y-0 left-0 z-40 w-[var(--sidebar-w)] border-r border-black bg-brand">
         {sidebar}
       </aside>
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="absolute inset-0 bg-gray-950/40 animate-fade-in" onClick={() => setMobileOpen(false)} />
-          <aside className="app-sidebar absolute inset-y-0 left-0 w-[280px] max-w-[85vw] bg-white border-r border-gray-200 shadow-xl animate-slide-in-left">
-            <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="absolute right-2 top-2.5 btn-ghost btn-icon">
+          <aside className="app-sidebar absolute inset-y-0 left-0 w-[280px] max-w-[85vw] bg-brand shadow-xl animate-slide-in-left">
+            <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="absolute right-2 top-3 z-10 inline-grid h-8 w-8 place-items-center rounded-lg text-zinc-300 hover:bg-white/10 hover:text-white">
               <X size={16} />
             </button>
             {sidebar}
@@ -242,7 +247,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="app-main lg:ml-[var(--sidebar-w)] flex min-h-screen flex-col">
-        <header className="app-topbar sticky top-0 z-30 flex h-[var(--topbar-h)] items-center gap-2 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 px-4 sm:px-6">
+        <header className="app-topbar no-print sticky top-0 z-30 flex h-[var(--topbar-h)] items-center gap-2 border-b border-line bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 px-4 sm:px-6">
           <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="lg:hidden btn-ghost btn-icon -ml-1.5">
             <Menu size={18} />
           </button>
@@ -277,7 +282,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main id="main" tabIndex={-1} className="app-content flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 focus:outline-none">
+        <main id="main" tabIndex={-1} className="app-content flex-1 w-full max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-5 lg:py-7 focus:outline-none">
           {children}
         </main>
       </div>
@@ -289,8 +294,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
 function NavGroup({ title, items, pathname }: { title?: string; items: NavItem[]; pathname: string }) {
   return (
-    <div>
-      {title && <p className="px-2 mb-1 text-2xs font-semibold uppercase tracking-[0.06em] text-gray-500">{title}</p>}
+    <div className="mb-4">
+      {title && (
+        <p className="flex items-center gap-2 px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+          {title}<span className="h-px flex-1 bg-white/10" aria-hidden />
+        </p>
+      )}
       <ul className="space-y-px">
         {items.map(item => {
           const active = inSection(pathname, item.href)
@@ -300,23 +309,23 @@ function NavGroup({ title, items, pathname }: { title?: string; items: NavItem[]
           return (
             <li key={item.href}>
               <Link href={item.href} aria-current={exact ? 'page' : undefined}
-                className={`group relative flex items-center gap-2.5 h-8 px-2 rounded-md text-[13px] font-medium transition-colors ${
-                  active ? 'bg-brand-50 text-brand-800' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                className={`group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13.5px] transition-colors ${
+                  active ? 'bg-white/[0.12] font-medium text-white' : 'text-zinc-300 hover:bg-white/[0.07] hover:text-white'
                 }`}>
-                <Icon size={16} strokeWidth={1.75} className={active ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'} />
+                <Icon size={17} strokeWidth={1.75} className={active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'} />
                 <span className="truncate">{item.label}</span>
               </Link>
               {active && item.children && (
-                <ul className="mt-0.5 mb-1 ml-[17px] border-l border-gray-200 pl-2 space-y-px">
+                <ul className="mt-0.5 mb-1 ml-[17px] space-y-px border-l border-white/10 pl-2">
                   {item.children.map(c => {
                     const on = child === c.href
                     return (
                       <li key={c.href}>
                         <Link href={c.href} aria-current={on ? 'page' : undefined}
-                          className={`relative flex items-center h-7 px-2 rounded-md text-[13px] transition-colors ${
-                            on ? 'text-gray-900 font-medium bg-gray-100' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                          className={`relative flex h-7 items-center rounded-md px-2 text-[13px] transition-colors ${
+                            on ? 'bg-white/[0.08] font-medium text-white' : 'text-zinc-400 hover:bg-white/[0.05] hover:text-white'
                           }`}>
-                          {on && <span className="absolute -left-[9px] top-1 bottom-1 w-0.5 rounded-full bg-brand-600" aria-hidden />}
+                          {on && <span className="absolute -left-[9px] top-1 bottom-1 w-0.5 rounded-full bg-white" aria-hidden />}
                           {c.label}
                         </Link>
                       </li>
