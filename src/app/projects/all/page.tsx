@@ -5,6 +5,7 @@ import { PageHeader, EmptyState, LoadingRows, SearchInput, StatusBadge, Badge } 
 import ProjectFormModal, { EMPTY_PROJECT, PROJECT_STATUSES, PROJECT_STATUS_LABELS, type Project } from '@/components/ProjectFormModal'
 import { fmtINR, fmtDate } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
+import { useNewParam } from '@/lib/useNewParam'
 
 const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'neutral'> = { urgent: 'danger', high: 'warning', normal: 'neutral', low: 'neutral' }
 
@@ -21,6 +22,7 @@ export default function AllProjects() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useNewParam(() => setEditing({ ...EMPTY_PROJECT, scheduled_date: new Date().toISOString().slice(0, 10) }))
 
   const filtered = projects.filter(p => {
     const q = search.toLowerCase()
