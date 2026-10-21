@@ -56,7 +56,7 @@ function plainOf(c: Col, r: Row): unknown {
 
 function Cell({ c, r }: { c: Col; r: Row }) {
   if (c.render) return <>{c.render(r)}</>
-  const v = r[c.key]
+  const v = plainOf(c, r)
   if (v === null || v === undefined || v === '') return <span className="text-faint">—</span>
   switch (c.kind) {
     case 'money': return <>{fmtINR(Number(v))}</>
