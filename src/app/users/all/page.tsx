@@ -11,6 +11,7 @@ import {
   parsePermissions, type UserPermissions, type ModuleName, type ActionName,
 } from '@/lib/permissions'
 import { navigate } from '@/lib/navigate'
+import { useSort, SortHeader, usePagination, Pagination, downloadCsv, ExportButton } from '@/components/table'
 
 interface User {
   id: string; name: string; email: string; phone: string; city: string
@@ -132,26 +133,39 @@ function AllUsersInner() {
 
   const q = search.toLowerCase()
   const filtered = users.filter(u => !q || u.name.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q) || (u.city ?? '').toLowerCase().includes(q))
+  const isAdminUser = (u: User) => u.role === 'admin' || u.access_level === 'admin'
+  const { sorted, sort, toggle } = useSort(filtered, {
+    name: u => u.name,
+    city: u => u.city,
+    access: u => (isAdminUser(u) ? 0 : 1),
+    status: u => u.status,
+  }, { key: 'name', dir: 'asc' })
+  const pager = usePagination(sorted, 25)
+  const exportCsv = () => downloadCsv('pongs-users', ['Name', 'Email', 'Phone', 'City', 'Access', 'Status', 'Added'],
+    sorted.map(u => [u.name, u.email, u.phone, u.city, isAdminUser(u) ? 'Admin' : 'Standard', u.status, String(u.created_at ?? '').slice(0, 10)]))
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="All users"
         description="Everyone who can sign in. Access is set per user."
-        actions={<button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add user</button>}
+        actions={<>
+          <ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />
+          <button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add user</button>
+        </>}
       />
 
       <div className="table-wrap">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="segmented">
+            <div className="segmented" role="group" aria-label="Access">
               {[['', 'Everyone'], ['admin', 'Admins'], ['viewer', 'Standard']].map(([v, l]) => (
-                <button key={v} data-active={roleFilter === v} onClick={() => setRoleFilter(v)}>{l}</button>
+                <button key={v} type="button" aria-pressed={roleFilter === v} data-active={roleFilter === v} onClick={() => setRoleFilter(v)}>{l}</button>
               ))}
             </div>
-            <div className="segmented">
+            <div className="segmented" role="group" aria-label="Status">
               {[['', 'Any status'], ['active', 'Active'], ['inactive', 'Inactive']].map(([v, l]) => (
-                <button key={v} data-active={statusFilter === v} onClick={() => setStatusFilter(v)}>{l}</button>
+                <button key={v} type="button" aria-pressed={statusFilter === v} data-active={statusFilter === v} onClick={() => setStatusFilter(v)}>{l}</button>
               ))}
             </div>
           </div>
@@ -165,17 +179,25 @@ function AllUsersInner() {
           <div className="table-scroll">
             <table className="table table-hover">
               <thead>
-                <tr><th>User</th><th className="hidden md:table-cell">Phone</th><th className="hidden lg:table-cell">City</th><th>Access</th><th className="hidden xl:table-cell">Modules</th><th>Status</th><th className="w-20"><span className="sr-only">Actions</span></th></tr>
+                <tr>
+                  <SortHeader label="User" sortKey="name" sort={sort} onSort={toggle} />
+                  <th className="hidden md:table-cell">Phone</th>
+                  <SortHeader label="City" sortKey="city" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
+                  <SortHeader label="Access" sortKey="access" sort={sort} onSort={toggle} />
+                  <th className="hidden xl:table-cell">Modules</th>
+                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={toggle} />
+                  <th className="w-20"><span className="sr-only">Actions</span></th>
+                </tr>
               </thead>
               <tbody>
-                {filtered.map(u => {
+                {pager.pageRows.map(u => {
                   const admin = (u.role ?? u.access_level) === 'admin'
                   const perms = parsePermissions(u.permissions_json)
                   const mods = MODULES.filter(m => perms[m]?.view)
                   return (
                     <tr key={u.id} className="cursor-pointer" onClick={e => {
                       if ((e.target as HTMLElement).closest('button,a')) return
-                      navigate(`/users/${u.id}`)
+                      navigate(`/users/${u.id}`, e)
                     }}>
                       <td>
                         <div className="flex items-center gap-3">
@@ -207,6 +229,7 @@ function AllUsersInner() {
             </table>
           </div>
         )}
+        {!loading && sorted.length > 0 && <Pagination {...pager} noun="users" />}
       </div>
 
       {showForm && (
