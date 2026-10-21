@@ -10,6 +10,13 @@
 | 2026-10-21 | All screens | done | Restyled through shared primitives (buttons, inputs, tables, badges, cards, modals, charts) |
 | 2026-10-21 | States | done | error/not-found/global-error/loading routes; stat skeletons; user-menu placeholder |
 | 2026-10-21 | Security | done | Open redirect on sign-in closed; security headers; API no-store |
-| next       | Dashboard API | todo | One /api/dashboard summary endpoint instead of 8 list requests |
-| next       | Tables | todo | Sortable columns and pagination on quotes, clients, products |
-| next       | Charts | todo | Lazy-load recharts on inventory/analytics (≈100 kB) |
+| 2026-10-21 | DB resilience | done | One query per pooled connection (no pipelining through Supavisor); 20s query timeout rebuilds the pool instead of hanging every request |
+| 2026-10-21 | Tables | done | Shared table kit: sortable headers (aria-sort), 25-row paging, CSV export (Excel-safe, formula-injection safe), URL-backed filters. Quotes, clients, projects, products, finance, users |
+| 2026-10-21 | Data safety | done | Product save failures keep the form open; quote status change rolls back on failure; list load errors show reason + retry |
+| 2026-10-21 | Loading states | done | Skeletons were invisible (removed CSS var) — fixed app-wide; project money cards no longer show ₹0 / Fully paid while loading |
+| 2026-10-21 | Dashboard API | done | /api/dashboard/counts replaces four full-list downloads |
+| 2026-10-21 | Session UX | done | Expired sessions redirect to sign-in with return path; tab titles per page/record |
+| 2026-10-21 | Quote builder | done | Sticky total + save bar below desktop width; Cmd/Ctrl+S |
+| next       | Tables | todo | Same table kit on purchases, suppliers, movements, access requests |
+| next       | Charts | todo | Lazy-load recharts on inventory/analytics (≈100 kB of the 200 kB) |
+| next       | Server pagination | todo | Lists load everything client-side; fine at today's volume, move paging to SQL past a few thousand rows |

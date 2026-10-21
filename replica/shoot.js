@@ -21,7 +21,8 @@ const ROUTES = [
 ]
 ;(async () => {
   const browser = await chromium.launch({ channel: 'chrome' })
-  for (const [w, h, tag] of [[1440, 900, 'desktop'], [390, 844, 'mobile']]) {
+  const sizes = [[1440, 900, 'desktop'], [390, 844, 'mobile']].filter(([, , t]) => !process.env.ONLY || process.env.ONLY === t)
+  for (const [w, h, tag] of sizes) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
     await ctx.addCookies([{ name: 'pongs_session', value: sid, url: BASE }])
     const page = await ctx.newPage()
