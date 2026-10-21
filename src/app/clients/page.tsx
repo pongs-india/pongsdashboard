@@ -1,14 +1,14 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Users2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Plus, Users2 } from 'lucide-react'
 import Gate from '@/components/Gate'
 import { useNewParam } from '@/lib/useNewParam'
-import { PageHeader, EmptyState, LoadingRows, SearchInput, Badge, Avatar, Stat, StatGrid } from '@/components/ui'
+import { PageHeader, Badge, Avatar, Stat, StatGrid } from '@/components/ui'
 import ClientFormModal, { EMPTY_CLIENT, CLIENT_STATUSES, CLIENT_STATUS_LABEL, SOURCE_LABEL, type ClientForm } from '@/components/ClientFormModal'
 import { fmtINR } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
-import { navigate } from '@/lib/navigate'
-import { useSort, SortHeader, usePagination, Pagination, downloadCsv, ExportButton, useUrlState } from '@/components/table'
+import { DataTable, type Col } from '@/components/DataTable'
+import { useFilters, FilterSelect, optionsFrom } from '@/components/filters'
 
 interface Client extends ClientForm {
   id: string
@@ -23,11 +23,10 @@ function ClientsPageInner() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useUrlState('q', '')
-  const [statusFilter, setStatusFilter] = useUrlState('status', 'all')
   const [editing, setEditing] = useState<{ id?: string; form: ClientForm } | null>(null)
   useNewParam(() => setEditing({ form: { ...EMPTY_CLIENT } }))
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const f = useFilters({ status: '', source: '', city: '', quoted: '' })
+  const v = f.values
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -42,7 +41,6 @@ function ClientsPageInner() {
     }
     setLoading(false)
   }, [])
-
   useEffect(() => { load() }, [load])
 
   const openEdit = (c: Client) => setEditing({
@@ -51,123 +49,87 @@ function ClientsPageInner() {
   })
 
   const del = async (c: Client) => {
-    const ok = await confirmDialog({ title: 'Delete client', body: `${c.name} will be removed from Clients. Their quotes and projects are not affected.`, confirmLabel: 'Delete client', tone: 'danger' })
+    const ok = await confirmDialog({ title: 'Delete client', body: `${c.name} will be removed from Clients. Their quotes and projects are not affected, and an administrator can restore the client from the audit log for 30 days.`, confirmLabel: 'Delete client', tone: 'danger' })
     if (!ok) return
-    setDeleting(c.id)
     const res = await fetch(`/api/clients/${c.id}`, { method: 'DELETE' })
-    setDeleting(null)
     if (res.ok) toast('Client deleted'); else toast('Could not delete the client', { tone: 'error' })
     load()
   }
 
-  const filtered = clients.filter(c => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || c.name?.toLowerCase().includes(q) || c.company?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.phone?.includes(q) || c.city?.toLowerCase().includes(q)
-    const matchStatus = statusFilter === 'all' || c.status === statusFilter
-    return matchSearch && matchStatus
-  })
-  const { sorted, sort, toggle } = useSort(filtered, {
-    name: c => c.company || c.name,
-    city: c => c.city,
-    status: c => CLIENT_STATUS_LABEL[c.status] ?? c.status,
-    quotes: c => Number(c.quote_count || 0),
-    value: c => Number(c.total_value || 0),
-  }, { key: 'name', dir: 'asc' })
-  const pager = usePagination(sorted, 25)
-  const exportCsv = () => downloadCsv('pongs-clients',
-    ['Name', 'Company', 'Email', 'Phone', 'City', 'GST number', 'Source', 'Status', 'Quotes', 'Quoted value (INR)'],
-    sorted.map(c => [c.name, c.company, c.email, c.phone, c.city, c.gst_number, SOURCE_LABEL[c.source] ?? c.source, CLIENT_STATUS_LABEL[c.status] ?? c.status, Number(c.quote_count || 0), Math.round(Number(c.total_value || 0))]))
-  const totalValue = clients.reduce((s, c) => s + Number(c.total_value || 0), 0)
-  const withQuotes = clients.filter(c => Number(c.quote_count) > 0).length
-  const top = [...clients].sort((a, b) => Number(b.total_value || 0) - Number(a.total_value || 0))[0]
+  const rows = useMemo(() => clients.filter(c =>
+    (!v.status || c.status === v.status) && (!v.source || c.source === v.source) && (!v.city || c.city === v.city) &&
+    (!v.quoted || (v.quoted === 'yes' ? Number(c.quote_count) > 0 : Number(c.quote_count) === 0))), [clients, v])
+  const totalValue = rows.reduce((s, c) => s + Number(c.total_value || 0), 0)
+  const withQuotes = rows.filter(c => Number(c.quote_count) > 0).length
+  const top = [...rows].sort((a, b) => Number(b.total_value || 0) - Number(a.total_value || 0))[0]
+
+  const cols: Col[] = [
+    { key: 'name', label: 'Client', value: r => String(r.company || r.name), render: r => (
+      <div className="flex items-center gap-3">
+        <Avatar name={String(r.company || r.name)} size={30} />
+        <div className="min-w-0">
+          <a href={`/clients/${r.id}`} className="block truncate">{String(r.company || r.name)}</a>
+          {r.company ? <div className="truncate text-[12px] text-faint">{String(r.name)}</div> : null}
+        </div>
+      </div>
+    ) },
+    { key: 'phone', label: 'Phone', hideBelow: 'lg', sub: { key: 'email', label: 'Email' } },
+    { key: 'city', label: 'City', hideBelow: 'md' },
+    { key: 'source', label: 'Source', hideBelow: 'xl', value: r => SOURCE_LABEL[String(r.source)] ?? String(r.source ?? '') },
+    { key: 'gst_number', label: 'GSTIN', hideBelow: 'xl', kind: 'mono' },
+    { key: 'status', label: 'Status', value: r => CLIENT_STATUS_LABEL[String(r.status)] ?? String(r.status ?? ''),
+      render: r => <Badge tone={STATUS_TONE[String(r.status)] ?? 'neutral'}>{CLIENT_STATUS_LABEL[String(r.status)] ?? String(r.status)}</Badge> },
+    { key: 'quote_count', label: 'Quotes', kind: 'int', hideBelow: 'sm', total: true },
+    { key: 'total_value', label: 'Quoted value', kind: 'money', total: true },
+  ]
+
+  const active = !!(v.status || v.source || v.city || v.quoted)
 
   return (
     <div className="page">
       <PageHeader
         title="Clients"
         description="Architects, builders and homeowners you quote and install for."
-        actions={<>
-          <ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />
-          <button onClick={() => setEditing({ form: { ...EMPTY_CLIENT } })} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add client</button>
-        </>}
+        actions={<button onClick={() => setEditing({ form: { ...EMPTY_CLIENT } })} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add client</button>}
       />
 
-      <StatGrid cols={3}>
-        <Stat label="Clients" value={loading ? null : clients.length} hint={`${clients.filter(c => c.status === 'vip').length} VIP`} />
-        <Stat label="Quoted to clients" value={loading ? null : fmtINR(totalValue)} hint={`${withQuotes} client${withQuotes !== 1 ? 's' : ''} with quotes`} />
-        <Stat label="Largest account" value={loading ? null : top && Number(top.total_value) > 0 ? fmtINR(top.total_value) : '—'} hint={top && Number(top.total_value) > 0 ? (top.company || top.name) : 'No quotes yet'} />
+      <StatGrid cols={4}>
+        <Stat label="Clients" value={loading ? null : rows.length} hint={loading ? undefined : `${rows.filter(c => c.status === 'vip').length} VIP · ${rows.filter(c => c.status === 'active').length} active`} />
+        <Stat label="Quoted to clients" value={loading ? null : fmtINR(totalValue)} hint={loading ? undefined : `${withQuotes} client${withQuotes !== 1 ? 's' : ''} with quotes`} />
+        <Stat label="Average per quoted client" value={loading ? null : withQuotes ? fmtINR(Math.round(totalValue / withQuotes)) : '—'} hint={loading ? undefined : 'Total quoted ÷ clients quoted'} />
+        <Stat label="Largest account" value={loading ? null : top && Number(top.total_value) > 0 ? fmtINR(top.total_value) : '—'} hint={loading ? undefined : top && Number(top.total_value) > 0 ? (top.company || top.name) : 'No quotes yet'} />
       </StatGrid>
 
-      <div className="table-wrap">
-        <div className="flex flex-col gap-3 border-b border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <button type="button" className="chip" aria-pressed={statusFilter === 'all'} data-active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>All <span className="tabular-nums opacity-60">{clients.length}</span></button>
-            {CLIENT_STATUSES.map(s => (
-              <button key={s} type="button" className="chip" aria-pressed={statusFilter === s} data-active={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}>
-                {CLIENT_STATUS_LABEL[s]} <span className="tabular-nums opacity-60">{clients.filter(c => c.status === s).length}</span>
-              </button>
-            ))}
-          </div>
-          <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, company, phone, city" />
-        </div>
-
-        {loading ? <LoadingRows rows={6} cols={5} /> : loadError ? (
-          <div className="p-5"><div className="alert-error" role="alert"><span><span className="font-medium">Clients could not be loaded.</span> {loadError} <button type="button" onClick={load} className="font-medium underline underline-offset-2">Retry</button></span></div></div>
-        ) : filtered.length === 0 ? (
-          <EmptyState icon={Users2} title={clients.length ? 'No clients match' : 'No clients yet'}
-            description={clients.length ? 'Try another search or status.' : 'Add the people and companies you work with.'}
-            action={!clients.length ? <button onClick={() => setEditing({ form: { ...EMPTY_CLIENT } })} className="btn-primary"><Plus size={15} /> Add client</button> : undefined} />
-        ) : (
-          <div className="table-scroll">
-            <table className="table table-hover">
-              <thead>
-                <tr>
-                  <SortHeader label="Client" sortKey="name" sort={sort} onSort={toggle} />
-                  <th className="hidden lg:table-cell">Contact</th>
-                  <SortHeader label="City" sortKey="city" sort={sort} onSort={toggle} className="hidden md:table-cell" />
-                  <th className="hidden xl:table-cell">Source</th>
-                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={toggle} />
-                  <SortHeader label="Quotes" sortKey="quotes" sort={sort} onSort={toggle} align="right" className="hidden sm:table-cell" />
-                  <SortHeader label="Quoted value" sortKey="value" sort={sort} onSort={toggle} align="right" />
-                  <th className="w-20"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pager.pageRows.map(c => (
-                  <tr key={c.id} className={`cursor-pointer ${deleting === c.id ? 'opacity-50' : ''}`} onClick={e => {
-                    if ((e.target as HTMLElement).closest('button,a')) return
-                    navigate(`/clients/${c.id}`, e)
-                  }}>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <Avatar name={c.company || c.name} size={30} />
-                        <div className="min-w-0">
-                          <a href={`/clients/${c.id}`} className="block truncate font-medium text-gray-900 hover:underline">{c.company || c.name}</a>
-                          {c.company && <div className="truncate text-xs text-gray-500">{c.name}</div>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden lg:table-cell">
-                      <div className="text-gray-700">{c.phone || '—'}</div>
-                      {c.email && <div className="text-xs text-gray-500">{c.email}</div>}
-                    </td>
-                    <td className="hidden md:table-cell">{c.city || '—'}</td>
-                    <td className="hidden xl:table-cell">{SOURCE_LABEL[c.source] ?? c.source ?? '—'}</td>
-                    <td><Badge tone={STATUS_TONE[c.status] ?? 'neutral'}>{CLIENT_STATUS_LABEL[c.status] ?? c.status}</Badge></td>
-                    <td className="num hidden sm:table-cell">{c.quote_count || 0}</td>
-                    <td className="num font-medium text-gray-900">{Number(c.total_value) ? fmtINR(c.total_value) : '—'}</td>
-                    <td className="text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(c)} className="btn-ghost btn-icon" aria-label={`Edit ${c.name}`}><Pencil size={14} /></button>
-                      <button onClick={() => del(c)} disabled={deleting === c.id} className="btn-ghost btn-icon text-gray-500 hover:text-red-700 hover:bg-red-50" aria-label={`Delete ${c.name}`}><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {!loading && !loadError && filtered.length > 0 && <Pagination {...pager} noun="clients" summary={`${fmtINR(filtered.reduce((s, c) => s + Number(c.total_value || 0), 0))} quoted`} />}
-      </div>
+      <DataTable
+        title="All clients"
+        exportTitle="Clients"
+        cols={cols}
+        rows={rows as unknown as Record<string, unknown>[]}
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        rowHref={r => `/clients/${r.id}`}
+        initialSort={{ key: 'name', dir: 1 }}
+        searchPlaceholder="Search name, phone, city"
+        rowActions={r => [
+          { icon: 'open', label: `Open ${r.name}`, href: `/clients/${r.id}` },
+          { icon: 'edit', label: `Edit ${r.name}`, onClick: () => openEdit(r as unknown as Client) },
+          { icon: 'trash', label: `Delete ${r.name}`, tone: 'danger', onClick: () => del(r as unknown as Client) },
+        ]}
+        filters={<>
+          <FilterSelect value={v.status} onChange={x => f.set({ status: x })} all="All statuses" options={CLIENT_STATUSES.map(s => ({ value: s, label: CLIENT_STATUS_LABEL[s] }))} />
+          <FilterSelect value={v.source} onChange={x => f.set({ source: x })} all="All sources" options={optionsFrom(clients, c => c.source, s => SOURCE_LABEL[s] ?? s)} />
+          <FilterSelect value={v.city} onChange={x => f.set({ city: x })} all="All cities" options={optionsFrom(clients, c => c.city)} />
+          <FilterSelect value={v.quoted} onChange={x => f.set({ quoted: x })} all="Quoted or not" className="w-full sm:w-40"
+            options={[{ value: 'yes', label: 'Has quotes' }, { value: 'no', label: 'No quotes yet' }]} />
+        </>}
+        filtersActive={active}
+        onClearFilters={f.clear}
+        note={[v.status && CLIENT_STATUS_LABEL[v.status], v.source && (SOURCE_LABEL[v.source] ?? v.source), v.city, v.quoted && (v.quoted === 'yes' ? 'Has quotes' : 'No quotes yet')].filter(Boolean).join(' · ') || undefined}
+        empty={{ icon: Users2, title: 'No clients yet', description: 'Add the people and companies you work with.',
+          action: <button onClick={() => setEditing({ form: { ...EMPTY_CLIENT } })} className="btn-primary btn-sm"><Plus size={14} /> Add client</button> }}
+        summary={visible => `${fmtINR(visible.reduce((s, c) => s + Number(c.total_value || 0), 0))} quoted`}
+      />
 
       {editing && (
         <ClientFormModal id={editing.id} initial={editing.form} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />
