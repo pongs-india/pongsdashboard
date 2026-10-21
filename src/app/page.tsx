@@ -52,15 +52,16 @@ export default function HomePage() {
     }).catch(() => { setLoadError('Could not reach the server.'); setQuotes([]) })
     if (canProjects) fetch('/api/projects').then(r => r.json()).then(d => setProjects(Array.isArray(d) ? d : [])).catch(() => setProjects([]))
     if (canInventory) fetch('/api/notifications').then(r => r.json()).then(d => setLowStock(d?.lowStock ?? [])).catch(() => setLowStock([]))
-    const count = (url: string, set: (n: number) => void) =>
-      fetch(url).then(r => r.json()).then(d => set(Array.isArray(d) ? d.length : 0)).catch(() => { /* optional */ })
-    if (canInventory) count('/api/inventory/products', setProductCount)
-    if (canClients) count('/api/clients', setClientCount)
+    // One request for every count the setup guide needs (permission-aware server side).
+    fetch('/api/dashboard/counts').then(r => (r.ok ? r.json() : {})).then((c: Record<string, number>) => {
+      if (canInventory && typeof c.products === 'number') setProductCount(c.products)
+      if (canClients && typeof c.clients === 'number') setClientCount(c.clients)
+      if (isAdmin) {
+        if (typeof c.users === 'number') setUserCount(c.users)
+        if (typeof c.pendingRequests === 'number') setPendingRequests(c.pendingRequests)
+      }
+    }).catch(() => { /* optional: the guide simply omits these steps */ })
     if (canFinance) fetch('/api/finance').then(r => r.json()).then(d => setFinance(Array.isArray(d) ? d : [])).catch(() => setFinance([]))
-    if (isAdmin) {
-      count('/api/users', setUserCount)
-      count('/api/access-requests?status=pending', setPendingRequests)
-    }
   }, [me, canQuotes, canProjects, canInventory, canClients, canFinance, isAdmin])
 
   if (loading) return <PageLoading />
