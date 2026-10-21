@@ -1,199 +1,192 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { BarChart3 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Gate from '@/components/Gate'
-import { PageHeader, Stat, StatGrid, EmptyState, PageLoading, statusDot, humanize } from '@/components/ui'
-import { ChartCard, ChartEmpty, ChartTooltip, CHART_PRIMARY, AXIS_TICK, GRID_STROKE, CURSOR_FILL, BAR_MAX, BAR_RADIUS, BAR_RADIUS_H, compactINR, fullINR } from '@/components/charts'
-import { PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
-import { fmtINR, fmtDate } from '@/lib/format'
+import { PageHeader, Stat, StatGrid, PageLoading } from '@/components/ui'
+import { PROJECT_STATUSES, PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
+import { fmtINR } from '@/lib/format'
+import { calculateQuote } from '@/lib/calculations'
+import type { Quote } from '@/lib/types'
+import { listCompanies } from '@/lib/companies'
+import { DataTable, type Col } from '@/components/DataTable'
+import { ChartCard, PairBars, Split, HBars, compactINR, lastMonths } from '@/components/miniCharts'
+import { useFilters, FilterSelect, PeriodFilter, resolvePeriod, inPeriod } from '@/components/filters'
+import { useMe } from '@/lib/useMe'
 
-type AnalyticsData = {
-  monthlyQuotes: { month: string; count: number; value: number }[]
-  topClients: { name: string; count: number; value: number; last: string }[]
-  quoteStatus: { status: string; count: number }[]
-  totalInvValue: number
-  invByCategory: { cat: string; val: number }[]
-  spendByCategory: { cat: string; val: number }[]
-  lowStockCount: number
-  projectsByStatus: Record<string, { count: number; value: number; area: number }>
-  totalActiveProjects: number
-  totalQuotesThisMonth: number
-  totalValueThisMonth: number
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-// API months are "MM/YYYY".
-const monthLabel = (m: string) => MONTHS[Number(m.slice(0, 2)) - 1] ?? m
-const monthLong = (m: string) => `${monthLabel(m)} ${m.slice(3)}`
-
-const QUOTE_STATUS_ORDER = ['draft', 'sent', 'approved', 'rejected']
+type Row = Record<string, unknown>
+const TIER_LABEL: Record<string, string> = { dealer: 'Dealer', msp: 'MSP', specifiors: 'Specifier', manual: 'Manual', manual_custom: 'Custom' }
+const STATUS_FILL: Record<string, string> = { draft: 'bg-line-hover', sent: 'bg-info-fill', approved: 'bg-success-fill', rejected: 'bg-danger-fill' }
+const totalOf = (q: Quote) => { try { return calculateQuote(q).grandTotal } catch { return 0 } }
+const statusOf = (q: Quote) => String((q as unknown as Row).status ?? 'draft')
 
 function AnalyticsInner() {
-  const [data, setData] = useState<AnalyticsData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [quotes, setQuotes] = useState<Quote[] | null>(null)
+  const [projects, setProjects] = useState<Row[]>([])
+  const [products, setProducts] = useState<Row[]>([])
+  const [purchases, setPurchases] = useState<Row[]>([])
+  const [error, setError] = useState('')
+  const { me } = useMe()
+  const f = useFilters({ period: 'fy', from: '', to: '', company: '' })
+  const v = f.values
 
-  useEffect(() => {
-    fetch('/api/analytics').then(r => r.json()).then(d => { setData(d); setLoading(false) }).catch(() => setLoading(false))
+  const load = useCallback(() => {
+    const get = (u: string) => fetch(u).then(r => (r.ok ? r.json() : [])).catch(() => [])
+    Promise.all([
+      fetch('/api/quotes').then(async r => { const d = await r.json().catch(() => null); if (!r.ok) throw new Error(d?.error || `The server returned ${r.status}.`); return d }),
+      get('/api/projects'), get('/api/inventory/products'), get('/api/inventory/purchases'),
+    ]).then(([q, p, pr, pu]) => {
+      setQuotes(Array.isArray(q) ? q : []); setProjects(Array.isArray(p) ? p : []); setProducts(Array.isArray(pr) ? pr : []); setPurchases(Array.isArray(pu) ? pu : [])
+      setError('')
+    }).catch(e => setError(e instanceof Error ? e.message : 'Could not reach the server.'))
   }, [])
+  useEffect(() => { load() }, [load])
 
-  if (loading) return <PageLoading />
-  if (!data || !data.monthlyQuotes) {
-    return <div className="card mt-8"><EmptyState icon={BarChart3} title="Analytics could not be loaded" description="Refresh the page to try again." /></div>
+  const period = resolvePeriod(v.period, v.from, v.to)
+  const scoped = useMemo(() => (quotes ?? []).filter(q => !v.company || (q.company ?? 'STC') === v.company), [quotes, v.company])
+  const inRange = useMemo(() => scoped.filter(q => inPeriod(q.date, period)).map(q => ({ q, total: totalOf(q), status: statusOf(q) })),
+    [scoped, period.from, period.to]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error && !quotes) {
+    return (
+      <div className="page">
+        <PageHeader title="Analytics" description="Quoting, projects and inventory." />
+        <div className="alert-error" role="alert"><span><span className="font-medium">Analytics could not be loaded.</span> {error} <button type="button" onClick={load} className="font-medium underline underline-offset-2">Retry</button></span></div>
+      </div>
+    )
   }
+  if (!quotes) return <PageLoading />
 
-  const months = data.monthlyQuotes.map(m => ({ ...m, label: monthLabel(m.month) }))
-  const hasQuotes = months.some(m => m.count > 0)
-  const statusTotal = data.quoteStatus.reduce((s, x) => s + x.count, 0)
-  const statuses = [...data.quoteStatus].sort((a, b) => {
-    const ia = QUOTE_STATUS_ORDER.indexOf(a.status), ib = QUOTE_STATUS_ORDER.indexOf(b.status)
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+  const quoted = inRange.reduce((s, x) => s + x.total, 0)
+  const won = inRange.filter(x => x.status === 'approved')
+  const decided = inRange.filter(x => ['approved', 'rejected'].includes(x.status)).length
+  const companies = listCompanies()
+  const companyName = v.company ? companies.find(c => c.id === v.company)?.shortName : ''
+
+  const monthly = lastMonths(12).map(m => {
+    const list = scoped.filter(q => String(q.date ?? '').startsWith(m.key))
+    return { label: m.label, a: list.reduce((s, q) => s + totalOf(q), 0), b: list.filter(q => statusOf(q) === 'approved').reduce((s, q) => s + totalOf(q), 0) }
   })
-  const sixMonthValue = months.reduce((s, m) => s + m.value, 0)
-  const pipeline = Object.entries(data.projectsByStatus)
-  const invCats = data.invByCategory.filter(c => c.val > 0).sort((a, b) => b.val - a.val)
-  const maxInv = Math.max(1, ...invCats.map(c => c.val))
-  const spend = data.spendByCategory.slice(0, 8).map(s => ({ ...s, cat: humanize(s.cat) }))
+  const byStatus = ['draft', 'sent', 'approved', 'rejected'].map(s => ({ label: s.charAt(0).toUpperCase() + s.slice(1), color: STATUS_FILL[s], value: inRange.filter(x => x.status === s).length }))
+  const byTier = Object.entries(inRange.reduce<Record<string, number>>((m, x) => { const t = TIER_LABEL[x.q.priceTier] ?? x.q.priceTier; m[t] = (m[t] ?? 0) + x.total; return m }, {}))
+    .map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+
+  const clientMap: Record<string, { client: string; quotes: number; quoted: number; won: number; last: string }> = {}
+  for (const x of inRange) {
+    const k = x.q.clientName || 'Unknown'
+    const c = (clientMap[k] ??= { client: k, quotes: 0, quoted: 0, won: 0, last: '' })
+    c.quotes++; c.quoted += x.total; if (x.status === 'approved') c.won += x.total
+    if (String(x.q.date) > c.last) c.last = String(x.q.date)
+  }
+  const clients = Object.values(clientMap)
+
+  const people: Record<string, { person: string; quotes: number; quoted: number; won: number; decided: number; approved: number }> = {}
+  for (const x of inRange) {
+    const k = x.q.ownerEmail || 'Unassigned'
+    const p = (people[k] ??= { person: k, quotes: 0, quoted: 0, won: 0, decided: 0, approved: 0 })
+    p.quotes++; p.quoted += x.total
+    if (x.status === 'approved') { p.won += x.total; p.approved++ }
+    if (['approved', 'rejected'].includes(x.status)) p.decided++
+  }
+  const salespeople = Object.values(people).map(p => ({ ...p, rate: p.decided ? (p.approved / p.decided) * 100 : null }))
+
+  const pipeline = PROJECT_STATUSES.map(s => {
+    const list = projects.filter(p => p.status === s)
+    return { status: s, label: PROJECT_STATUS_LABELS[s], count: list.length, area: list.reduce((t, p) => t + Number(p.ceiling_area_sqft || 0), 0), value: list.reduce((t, p) => t + Number(p.contract_value || 0), 0) }
+  }).filter(p => p.count > 0)
+  const active = projects.filter(p => !['completed', 'invoiced', 'cancelled'].includes(String(p.status)))
+
+  const invByCat = Object.entries(products.reduce<Record<string, number>>((m, p) => { const c = String(p.category || 'Uncategorised'); m[c] = (m[c] ?? 0) + Number(p.current_stock || 0) * Number(p.cost_price || 0); return m }, {}))
+    .map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+  const spendByCat = Object.entries(purchases.filter(p => inPeriod(p.purchase_date, period)).flatMap(p => (p.items as Row[] | undefined) ?? [])
+    .reduce<Record<string, number>>((m, i) => { const c = String(i.category || 'Other'); m[c] = (m[c] ?? 0) + Number(i.total_price || 0); return m }, {}))
+    .map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
+
+  const clientCols: Col[] = [
+    { key: 'client', label: 'Client', render: r => <span className="font-medium">{String(r.client)}</span> },
+    { key: 'quotes', label: 'Quotes', kind: 'int', total: true },
+    { key: 'last', label: 'Last quote', kind: 'date', hideBelow: 'md' },
+    { key: 'won', label: 'Won', kind: 'money', total: true, hideBelow: 'sm' },
+    { key: 'quoted', label: 'Quoted value', kind: 'money', total: true },
+  ]
+  const peopleCols: Col[] = [
+    { key: 'person', label: 'Salesperson', render: r => <span className="font-medium">{String(r.person)}</span> },
+    { key: 'quotes', label: 'Quotes', kind: 'int', total: true },
+    { key: 'rate', label: 'Win rate', kind: 'percent', hideBelow: 'sm' },
+    { key: 'won', label: 'Won', kind: 'money', total: true },
+    { key: 'quoted', label: 'Quoted', kind: 'money', total: true },
+  ]
+  const pipelineCols: Col[] = [
+    { key: 'label', label: 'Stage', sortValue: r => PROJECT_STATUSES.indexOf(String(r.status)) },
+    { key: 'count', label: 'Projects', kind: 'int', total: true },
+    { key: 'area', label: 'Area (sqft)', kind: 'int', total: true, hideBelow: 'sm' },
+    { key: 'value', label: 'Value', kind: 'money', total: true },
+  ]
+  const scope = [period.key === 'custom' ? `${period.from} to ${period.to}` : period.label, companyName].filter(Boolean).join(' · ')
 
   return (
     <div className="page">
-      <PageHeader title="Analytics" description="Quoting, projects and inventory over the last six months." />
+      <PageHeader title="Analytics" description="Quoting performance, the project pipeline and inventory, for the period and company you pick." />
 
-      <StatGrid>
-        <Stat label="Quotes this month" value={data.totalQuotesThisMonth} hint={`${fmtINR(data.totalValueThisMonth)} quoted`} href="/quotes" />
-        <Stat label="Active projects" value={data.totalActiveProjects} hint="Not completed or invoiced" href="/projects" />
-        <Stat label="Inventory value" value={fmtINR(data.totalInvValue)} hint="Stock on hand at cost" href="/inventory" />
-        <Stat label="Below minimum stock" value={data.lowStockCount} tone={data.lowStockCount > 0 ? 'warning' : 'neutral'}
-          hint={data.lowStockCount > 0 ? 'Need reordering' : 'All stocked'} href="/inventory/reorder" />
+      <div className="no-print flex flex-wrap items-center gap-2">
+        <PeriodFilter period={v.period} from={v.from} to={v.to} dateLabel="Quote date" onChange={x => f.set(x)} />
+        <FilterSelect value={v.company} onChange={x => f.set({ company: x })} all="All companies" className="w-full sm:w-40" options={companies.map(c => ({ value: c.id, label: c.shortName }))} />
+        {f.active && <button type="button" className="btn-ghost btn-sm" onClick={f.clear}>Reset</button>}
+      </div>
+
+      <StatGrid cols={5}>
+        <Stat label="Quoted" value={fmtINR(quoted)} hint={`${inRange.length} quotes`} />
+        <Stat label="Won" value={fmtINR(won.reduce((s, x) => s + x.total, 0))} hint={`${won.length} approved`} tone={won.length ? 'success' : 'neutral'} />
+        <Stat label="Win rate" value={decided ? `${Math.round((won.length / decided) * 100)}%` : '—'} hint={decided ? `${decided} decided quotes` : 'No decisions yet'} />
+        <Stat label="Average quote" value={inRange.length ? fmtINR(Math.round(quoted / inRange.length)) : '—'} hint="Quoted value per quote" />
+        <Stat label="Active projects" value={active.length} hint={`${fmtINR(active.reduce((s, p) => s + Number(p.contract_value || 0), 0))} contracted`} href="/projects/all" />
       </StatGrid>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Quoted value by month" description={`${fmtINR(sixMonthValue)} over six months`}
-          table={{ columns: ['Month', 'Quotes', 'Value'], rows: months.map(m => [monthLong(m.month), m.count, fullINR(m.value)]), alignRight: [1, 2] }}>
-          {!hasQuotes ? <ChartEmpty>No quotes in the last six months.</ChartEmpty> : (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={months} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke={GRID_STROKE} />
-                <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
-                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} width={52} />
-                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip />} />
-                <Bar dataKey="value" name="Quoted value" fill={CHART_PRIMARY} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        <ChartCard title="Quotes issued by month" description={`${months.reduce((s, m) => s + m.count, 0)} quotes over six months`}
-          table={{ columns: ['Month', 'Quotes'], rows: months.map(m => [monthLong(m.month), m.count]), alignRight: [1] }}>
-          {!hasQuotes ? <ChartEmpty>No quotes in the last six months.</ChartEmpty> : (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={months} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke={GRID_STROKE} />
-                <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
-                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip format={v => `${v} quote${v === 1 ? '' : 's'}`} />} />
-                <Bar dataKey="count" name="Quotes" fill={CHART_PRIMARY} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
+      <div className="grid-equal lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ChartCard title="Quoted and won per month" subtitle={`Last 12 months${companyName ? `, ${companyName}` : ''}`}><PairBars data={monthly} names={['Quoted', 'Won']} /></ChartCard>
+        </div>
+        <div>
+          <ChartCard title="Quotes by status" subtitle={scope}><Split parts={byStatus} /></ChartCard>
+        </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <section className="card">
-          <div className="card-header"><h2 className="card-title">Quotes by status</h2><span className="text-xs text-gray-500 tabular-nums">{statusTotal} total</span></div>
-          {statuses.length === 0 ? <EmptyState icon={BarChart3} title="No quotes yet" compact /> : (
-            <ul className="space-y-3.5 p-5">
-              {statuses.map(s => {
-                const pct = statusTotal ? (s.count / statusTotal) * 100 : 0
-                return (
-                  <li key={s.status}>
-                    <div className="flex items-baseline justify-between text-[13px]">
-                      <span className="flex items-center gap-2 text-gray-800"><span className={`dot ${statusDot(s.status)}`} />{humanize(s.status)}</span>
-                      <span className="tabular-nums text-gray-500"><span className="font-medium text-gray-900">{s.count}</span> · {pct.toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-gray-100"><div className={`h-1.5 rounded-full ${statusDot(s.status)}`} style={{ width: `${pct}%` }} /></div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className="table-wrap">
-          <div className="card-header"><h2 className="card-title">Project pipeline</h2><a href="/projects" className="card-link">Projects</a></div>
-          {pipeline.length === 0 ? <EmptyState icon={BarChart3} title="No projects yet" compact /> : (
-            <table className="table">
-              <thead><tr><th>Stage</th><th className="num">Projects</th><th className="num">Area</th><th className="num">Value</th></tr></thead>
-              <tbody>
-                {pipeline.map(([status, d]) => (
-                  <tr key={status}>
-                    <td><span className="flex items-center gap-2"><span className={`dot ${statusDot(status)}`} />{PROJECT_STATUS_LABELS[status] ?? humanize(status)}</span></td>
-                    <td className="num">{d.count}</td>
-                    <td className="num">{d.area.toLocaleString('en-IN')} sqft</td>
-                    <td className="num font-medium text-gray-900">{fmtINR(d.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+      <div className="grid-equal lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <DataTable title="Top clients" exportTitle={`Top clients, ${scope}`} cols={clientCols} rows={clients as unknown as Row[]} rowKey="client"
+            initialSort={{ key: 'quoted', dir: -1 }} pageSize={10} searchPlaceholder="Search client"
+            empty={{ title: 'No quotes in this period', description: 'Pick a longer period to see clients.' }} />
+        </div>
+        <div>
+          <ChartCard title="Value by price list" subtitle={scope}><HBars data={byTier} format={compactINR} /></ChartCard>
+        </div>
       </div>
 
-      <section className="table-wrap mt-4">
-        <div className="card-header"><h2 className="card-title">Top clients by quoted value</h2><a href="/clients" className="card-link">Clients</a></div>
-        {data.topClients.length === 0 ? <EmptyState icon={BarChart3} title="No clients yet" compact /> : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead><tr><th className="w-10">#</th><th>Client</th><th className="num">Quotes</th><th className="num hidden sm:table-cell">Last quote</th><th className="num">Quoted value</th></tr></thead>
-              <tbody>
-                {data.topClients.map((c, i) => (
-                  <tr key={c.name}>
-                    <td className="text-xs text-gray-400 tabular-nums">{i + 1}</td>
-                    <td className="font-medium text-gray-900">{c.name}</td>
-                    <td className="num">{c.count}</td>
-                    <td className="num hidden sm:table-cell text-gray-500">{fmtDate(c.last)}</td>
-                    <td className="num font-medium text-gray-900">{fmtINR(c.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {me?.isAdmin && (
+        <DataTable title="Salespeople" exportTitle={`Salespeople, ${scope}`} cols={peopleCols} rows={salespeople as unknown as Row[]} rowKey="person"
+          initialSort={{ key: 'quoted', dir: -1 }} hideSearch
+          empty={{ title: 'No quotes in this period' }} />
+      )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <section className="card">
-          <div className="card-header"><h2 className="card-title">Inventory value by category</h2><span className="text-xs text-gray-500 tabular-nums">{fmtINR(data.totalInvValue)}</span></div>
-          {invCats.length === 0 ? <EmptyState icon={BarChart3} title="No inventory data" compact /> : (
-            <ul className="space-y-3.5 p-5">
-              {invCats.map(c => (
-                <li key={c.cat}>
-                  <div className="flex items-baseline justify-between text-[13px]">
-                    <span className="text-gray-800">{humanize(c.cat)}</span>
-                    <span className="font-medium tabular-nums text-gray-900">{fmtINR(c.val)}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 rounded-full bg-gray-100"><div className="h-1.5 rounded-full" style={{ width: `${(c.val / maxInv) * 100}%`, background: CHART_PRIMARY }} /></div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <div className="grid-equal lg:grid-cols-2">
+        <div>
+          <DataTable title="Project pipeline" exportTitle="Project pipeline" cols={pipelineCols} rows={pipeline as unknown as Row[]} rowKey="status"
+            initialSort={{ key: 'label', dir: 1 }} hideSearch
+            toolbar={<a href="/projects" className="btn-secondary btn-sm">Projects</a>}
+            empty={{ title: 'No projects yet' }} />
+        </div>
+        <div>
+          <ChartCard title="Inventory value by category" subtitle="On hand, at cost"><HBars data={invByCat} format={compactINR} /></ChartCard>
+        </div>
+      </div>
 
-        <ChartCard title="Purchase spend by category" description="All purchase order lines"
-          table={{ columns: ['Category', 'Spend'], rows: spend.map(s => [s.cat, fullINR(s.val)]), alignRight: [1] }}>
-          {spend.length === 0 ? <ChartEmpty>No purchase data yet.</ChartEmpty> : (
-            <ResponsiveContainer width="100%" height={Math.max(160, spend.length * 40)}>
-              <BarChart data={spend} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
-                <XAxis type="number" tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} />
-                <YAxis type="category" dataKey="cat" tick={AXIS_TICK} axisLine={false} tickLine={false} width={110} />
-                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip />} />
-                <Bar dataKey="val" name="Spend" fill={CHART_PRIMARY} radius={BAR_RADIUS_H} maxBarSize={BAR_MAX} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
+      <div className="grid-equal lg:grid-cols-2">
+        <div>
+          <ChartCard title="Purchase spend by category" subtitle={`Purchase order lines, ${period.label.toLowerCase() === 'all time' ? 'all time' : scope}`}><HBars data={spendByCat} format={compactINR} /></ChartCard>
+        </div>
+        <div>
+          <ChartCard title="Quoted value by company" subtitle={period.label}>
+            <HBars data={companies.map(c => ({ label: c.shortName, value: (quotes ?? []).filter(q => (q.company ?? 'STC') === c.id && inPeriod(q.date, period)).reduce((s, q) => s + totalOf(q), 0) }))} format={compactINR} />
+          </ChartCard>
+        </div>
       </div>
     </div>
   )
