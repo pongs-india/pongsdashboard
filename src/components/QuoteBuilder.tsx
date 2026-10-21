@@ -220,7 +220,7 @@ export default function QuoteBuilder({ initial, mode, title, description }: Prop
   }, [])
 
   return (
-    <div className="pb-20 xl:pb-0">
+    <div className="page pb-20 xl:pb-0">
       <PageHeader
         title={title}
         description={description}

@@ -56,7 +56,7 @@ function AnalyticsInner() {
   const spend = data.spendByCategory.slice(0, 8).map(s => ({ ...s, cat: humanize(s.cat) }))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Analytics" description="Quoting, projects and inventory over the last six months." />
 
       <StatGrid>

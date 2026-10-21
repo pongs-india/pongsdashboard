@@ -78,7 +78,7 @@ export default function PurchasesPage() {
   const formTotal = form.items.reduce((s, i) => s + Number(i.total_price), 0)
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Purchases"
         description="Purchase orders placed with suppliers."

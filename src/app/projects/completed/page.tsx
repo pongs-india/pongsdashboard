@@ -31,7 +31,7 @@ export default function CompletedProjects() {
   const totalValue = filtered.reduce((s, p) => s + Number(p.contract_value || 0), 0)
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Completed projects"
         description="Finished and invoiced installations."

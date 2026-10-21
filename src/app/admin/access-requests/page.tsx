@@ -59,7 +59,7 @@ function AccessRequestsPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Access requests" description="People asking to join the workspace. Approving creates their account." />
 
       <div className="segmented mb-4">

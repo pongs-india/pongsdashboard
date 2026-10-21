@@ -56,7 +56,7 @@ export default function MovementsPage() {
   const unitOf = (id: string) => products.find(p => p.id === id)?.unit ?? ''
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Stock movements"
         description="Every unit received into or issued from stock."

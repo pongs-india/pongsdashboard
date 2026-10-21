@@ -145,7 +145,7 @@ function AllUsersInner() {
     sorted.map(u => [u.name, u.email, u.phone, u.city, isAdminUser(u) ? 'Admin' : 'Standard', u.status, String(u.created_at ?? '').slice(0, 10)]))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="All users"
         description="Everyone who can sign in. Access is set per user."

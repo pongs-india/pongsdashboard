@@ -54,7 +54,7 @@ export default function WorkCompletionPage() {
   const filtered = jobs.filter(j => !q || j.project_name.toLowerCase().includes(q) || (j.client_name ?? '').toLowerCase().includes(q) || (j.location ?? '').toLowerCase().includes(q))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Work completion"
         description="Record of finished jobs for material reconciliation."

@@ -99,7 +99,7 @@ export default function ProductsPage() {
   const value = filtered.reduce((s, p) => s + Number(p.current_stock) * Number(p.cost_price), 0)
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Products"
         description="Every stocked item with its levels and prices."

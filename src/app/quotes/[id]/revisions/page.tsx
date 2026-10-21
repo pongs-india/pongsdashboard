@@ -12,7 +12,7 @@ export default async function RevisionTrailPage({ params }: { params: { id: stri
   const projectId = await dbGetProjectIdForQuote(quote.id)
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <QuoteHeader quote={quote} active="revisions" projectId={projectId} printable={false} />
       <RevisionTrail quoteId={quote.id} />
     </div>

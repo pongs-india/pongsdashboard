@@ -82,7 +82,7 @@ function ClientsPageInner() {
   const top = [...clients].sort((a, b) => Number(b.total_value || 0) - Number(a.total_value || 0))[0]
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Clients"
         description="Architects, builders and homeowners you quote and install for."

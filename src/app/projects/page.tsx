@@ -33,7 +33,7 @@ export default function ProjectsDashboard() {
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Projects"
         description="Installation pipeline from scheduling to invoicing."

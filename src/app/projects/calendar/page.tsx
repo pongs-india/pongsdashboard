@@ -38,7 +38,7 @@ export default function CalendarPage() {
   function goToday() { setYear(now.getFullYear()); setMonth(now.getMonth()); setSelected(today) }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Schedule" description={`${monthProjects.length} installation${monthProjects.length !== 1 ? 's' : ''} scheduled in ${fmtMonth(new Date(year, month)).split(' ')[0]}.`} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">

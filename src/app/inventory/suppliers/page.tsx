@@ -51,7 +51,7 @@ export default function SuppliersPage() {
   const filtered = suppliers.filter(s => !q || s.name.toLowerCase().includes(q) || (s.city ?? '').toLowerCase().includes(q) || (s.contact_name ?? '').toLowerCase().includes(q))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Suppliers"
         description="Vendors for fabric, lighting and hardware."

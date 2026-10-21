@@ -62,7 +62,7 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Inventory activity"
         description="Purchases and stock movements, newest first."

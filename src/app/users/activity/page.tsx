@@ -53,7 +53,7 @@ export default async function ActivityPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Activity log" description="Sign-ins and account changes, newest first. Showing the latest 150 events." />
 
       <div className="card max-w-4xl">

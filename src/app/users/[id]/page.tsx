@@ -25,7 +25,7 @@ export default async function UserDetailPage({ params }: { params: { id: string 
   const active = String(user.status ?? 'active') === 'active'
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <Avatar name={String(user.name)} size={48} />

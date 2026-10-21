@@ -25,7 +25,7 @@ export default function ReorderPage() {
   const out = products.filter(p => p.current_stock <= 0).length
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Reorder alerts"
         description="Products at or below their minimum stock level, most urgent first."

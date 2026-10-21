@@ -25,7 +25,7 @@ export default async function TeamPage({ params }: { params: { id: string } }) {
   const installRate = quote.installationRatePerSqft ?? 120
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <QuoteHeader quote={quote} active="overview" projectId={projectId} />
 
       {/* Commercial summary */}

@@ -114,7 +114,7 @@ export default function HomePage() {
   const firstName = me?.name?.split(' ')[0]
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
         description={

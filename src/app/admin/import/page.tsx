@@ -106,7 +106,7 @@ function ImportPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Data import" description="Copy records from the Airtable workspace, or load sample data to review the app." />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] max-w-5xl">

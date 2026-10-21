@@ -34,7 +34,7 @@ function AccessOverview() {
     .filter(u => !q || u.name.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Access overview" description="What every user can open, module by module." />
 
       <div className="alert-info mb-4">

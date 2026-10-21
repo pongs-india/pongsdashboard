@@ -17,7 +17,7 @@ export default async function FabricRollsPage() {
   const maxStock = Math.max(1, ...rolls.map(p => Math.max(Number(p.current_stock ?? 0), Number(p.min_stock ?? 0) * 2)))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Fabric rolls" description="Stretch ceiling fabric on hand, by product." />
 
       <StatGrid cols={3}>

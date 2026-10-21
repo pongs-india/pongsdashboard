@@ -55,7 +55,7 @@ export default function InventoryDashboard() {
   const maxCat = Math.max(1, ...categories.map(c => c[1]))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Inventory"
         description="Stock on hand, purchasing and items that need reordering."

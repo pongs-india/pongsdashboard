@@ -173,7 +173,7 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
     : 'Pipeline overview and the latest quotations.'
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title={heading}
         description={description}

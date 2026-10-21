@@ -161,7 +161,7 @@ export default function ProjectDetailPage() {
   ]
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

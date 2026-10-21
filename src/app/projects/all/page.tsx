@@ -62,7 +62,7 @@ export default function AllProjects() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="All projects"
         description="Every installation project, current and past."

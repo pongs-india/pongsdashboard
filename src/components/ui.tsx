@@ -19,21 +19,27 @@ export function PageHeader({
   meta?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+    // No margins: the page root (.page) spaces sections with its gap.
+    // Action order: secondary actions, export/print, then at most one primary last.
+    <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
       {typeof title === 'string' && <DocumentTitle title={title} />}
-      <div className="min-w-0">
-        <h1 className="text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900 truncate">{title}</h1>
-        {description && <p className="mt-1 text-[13px] text-gray-500">{description}</p>}
+      <div className="min-w-0 flex-1 basis-72">
+        <h1 className="page-title break-words">{title}</h1>
+        {description && <p className="mt-1 text-[13px] text-faint">{description}</p>}
         {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+      {actions && <div className="no-print flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }
 
+// One card, figures side by side with hairline dividers. Flex-wrap rather than
+// a grid: cells on a short last row stretch to fill it, so a cell is never left
+// empty and every figure in a row shares one height. `cols` sets how many fit
+// per row on wide screens.
 export function StatGrid({ children, cols = 4 }: { children: ReactNode; cols?: 2 | 3 | 4 | 5 }) {
-  const c = { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 5: 'lg:grid-cols-5' }[cols]
-  return <div className={`grid grid-cols-2 ${c} gap-3 mb-6`}>{children}</div>
+  const basis = { 2: 'sm:[&>*]:basis-[18rem]', 3: 'sm:[&>*]:basis-[14rem]', 4: 'sm:[&>*]:basis-[13rem]', 5: 'sm:[&>*]:basis-[11rem]' }[cols]
+  return <div className={`card flex flex-wrap overflow-hidden ${basis}`}>{children}</div>
 }
 
 export function Stat({
@@ -43,6 +49,7 @@ export function Stat({
   icon: Icon,
   tone = 'neutral',
   href,
+  unit,
 }: {
   label: ReactNode
   /** null while loading: renders a skeleton instead of a placeholder dash */
@@ -51,22 +58,26 @@ export function Stat({
   icon?: LucideIcon
   tone?: 'neutral' | 'danger' | 'warning' | 'success'
   href?: string
+  /** Shown after the number in the quiet colour (kg, sqft). */
+  unit?: string
 }) {
-  const hintTone = { neutral: 'text-gray-500', danger: 'text-red-700', warning: 'text-amber-700', success: 'text-success-700' }[tone]
+  const hintTone = { neutral: 'text-faint', danger: 'text-danger', warning: 'text-warning', success: 'text-success' }[tone]
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
         <span className="stat-label truncate">{label}</span>
-        {Icon && <Icon size={15} className="text-gray-400 shrink-0" strokeWidth={1.75} />}
+        {Icon && <Icon size={14} className="shrink-0 text-faint" strokeWidth={1.75} aria-hidden />}
       </div>
       {value === null || value === undefined
-        ? <div className="mt-3 mb-1 skeleton h-6 w-24" aria-label="Loading" />
-        : <div className="stat-value truncate">{value}</div>}
-      {hint && <div className={`mt-1 text-xs ${hintTone} truncate`}>{hint}</div>}
+        ? <div className="mt-2.5 mb-1 skeleton h-6 w-24" aria-label="Loading" />
+        : <div className="stat-value truncate">{value}{unit && <span className="ml-1 text-[13px] font-normal text-faint">{unit}</span>}</div>}
+      <div className={`mt-1 min-h-[16px] text-[12px] ${hintTone} truncate`}>{hint}</div>
     </>
   )
-  if (href) return <a href={href} className="stat-card block hover:border-gray-300 transition-colors">{body}</a>
-  return <div className="stat-card">{body}</div>
+  // Each cell draws its own top and left hairline; the card clips the outer edge.
+  const cls = '-ml-px -mt-px min-w-0 grow basis-[10.5rem] border-l border-t border-line px-4 py-3.5'
+  if (href) return <a href={href} className={`${cls} block transition-colors hover:bg-surface-alt`}>{body}</a>
+  return <div className={cls}>{body}</div>
 }
 
 export function Card({
@@ -75,7 +86,7 @@ export function Card({
   actions,
   children,
   className = '',
-  bodyClassName = 'p-5',
+  bodyClassName = 'p-4',
 }: {
   title?: ReactNode
   description?: ReactNode
@@ -85,17 +96,17 @@ export function Card({
   bodyClassName?: string
 }) {
   return (
-    <section className={`card ${className}`}>
+    <section className={`card flex flex-col ${className}`}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex min-h-[48px] items-center justify-between gap-3 border-b border-line px-4 py-2.5">
           <div className="min-w-0">
             {title && <h2 className="card-title">{title}</h2>}
-            {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+            {description && <p className="meta mt-0.5">{description}</p>}
           </div>
           {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
         </div>
       )}
-      <div className={bodyClassName}>{children}</div>
+      <div className={`flex-1 ${bodyClassName}`}>{children}</div>
     </section>
   )
 }
@@ -185,6 +196,8 @@ export function statusDot(status: string | null | undefined) {
   return TONE_DOT[toneFor(status)]
 }
 
+/** One empty state. Says whether nothing exists yet or filters are hiding rows,
+ *  and offers the next step. */
 export function EmptyState({
   icon: Icon,
   title,
@@ -199,15 +212,11 @@ export function EmptyState({
   compact?: boolean
 }) {
   return (
-    <div className={`flex flex-col items-center justify-center text-center px-6 ${compact ? 'py-10' : 'py-16'}`}>
-      {Icon && (
-        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 shadow-sm">
-          <Icon size={18} strokeWidth={1.75} />
-        </div>
-      )}
-      <p className="text-sm font-medium text-gray-900">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-[13px] text-gray-500">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+    <div className={`flex flex-col items-center justify-center gap-1 px-4 text-center ${compact ? 'py-8' : 'py-12'}`}>
+      {Icon && <Icon size={18} strokeWidth={1.75} className="mb-1.5 text-faint" aria-hidden />}
+      <p className="text-[13.5px] font-medium text-ink">{title}</p>
+      {description && <p className="max-w-md text-[13px] text-faint">{description}</p>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   )
 }
@@ -228,7 +237,7 @@ export function LoadingRows({ rows = 5, cols = 4 }: { rows?: number; cols?: numb
 
 export function PageLoading() {
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <div className="mb-6 space-y-2">
         <div className="skeleton h-6 w-48" />
         <div className="skeleton h-3.5 w-72" />
@@ -286,7 +295,7 @@ export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
 }
 
 export function Toolbar({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">{children}</div>
+  return <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-2">{children}</div>
 }
 
 export function SearchInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {

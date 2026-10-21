@@ -61,7 +61,7 @@ function FinanceInner() {
     sorted.map(p => [p.name, p.client_name, PROJECT_STATUS_LABELS[p.status] ?? p.status, Number(p.contract_value || 0), Number(p.total_paid || 0), Math.max(0, owing(p)), Number(p.total_expenses || 0), profitOf(p)]))
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader title="Finance" description="Collections, expenses and profit across every project."
         actions={<ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />} />
 

@@ -23,7 +23,7 @@ export default async function InternalPage({ params }: { params: { id: string } 
   const dateStr = fmtDateLong(quote.date)
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <QuoteHeader quote={quote} active="internal" projectId={projectId} />
 
       {/* Print-only heading */}

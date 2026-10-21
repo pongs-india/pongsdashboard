@@ -35,7 +35,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
   }).reverse() // newest first for display
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

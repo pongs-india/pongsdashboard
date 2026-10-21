@@ -38,7 +38,7 @@ function UsersDashboard() {
   for (const u of users) { const c = u.city || 'Not set'; byCity[c] = (byCity[c] ?? 0) + 1 }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page">
       <PageHeader
         title="Team and access"
         description="Who can sign in and what each person can open."
