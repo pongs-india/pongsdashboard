@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation'
-import DocumentTitle from '@/components/DocumentTitle'
 import { ArrowLeftRight } from 'lucide-react'
 import { dbGetProduct } from '@/lib/db'
 import { fmtINR, fmtDate } from '@/lib/format'
@@ -42,7 +41,6 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
             <Badge tone={STOCK_TONE[st]} dot>{STOCK_LABEL[st]}</Badge>
             {product.sku ? <span className="mono text-xs text-gray-500">{String(product.sku)}</span> : null}
           </div>
-          <DocumentTitle title={String(String(product.name))} />
           <h1 className="mt-2 text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900">{String(product.name)}</h1>
           <p className="mt-1 text-[13px] text-gray-500">{String(product.category || 'Uncategorised')}{unit ? ` · counted in ${unit}` : ''}</p>
         </div>

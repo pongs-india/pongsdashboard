@@ -1,7 +1,5 @@
-import type { Metadata } from 'next'
 import QuoteBuilder from '@/components/QuoteBuilder'
 
-export const metadata: Metadata = { title: 'New quote' }
 
 export default function NewQuotePage() {
   return (

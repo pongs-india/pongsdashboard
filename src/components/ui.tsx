@@ -2,7 +2,6 @@ import type { ReactNode, InputHTMLAttributes } from 'react'
 import { Search } from 'lucide-react'
 export { Modal } from '@/components/Modal'
 import type { LucideIcon } from 'lucide-react'
-import DocumentTitle from '@/components/DocumentTitle'
 
 // Shared presentation primitives. Every page composes these so headings,
 // metrics, statuses and empty states look and behave the same everywhere.
@@ -22,7 +21,6 @@ export function PageHeader({
     // No margins: the page root (.page) spaces sections with its gap.
     // Action order: secondary actions, export/print, then at most one primary last.
     <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-      {typeof title === 'string' && <DocumentTitle title={title} />}
       <div className="min-w-0 flex-1 basis-72">
         <h1 className="page-title break-words">{title}</h1>
         {description && <p className="mt-1 text-[13px] text-faint">{description}</p>}

@@ -8,7 +8,8 @@ import { FeedbackHost } from '@/components/feedback'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: { default: 'Pongs India', template: '%s · Pongs India' },
+  // One fixed tab title on every page.
+  title: 'Pongs India',
   description: 'Quotations, projects and inventory for Pongs India stretch ceilings',
   applicationName: 'Pongs India',
 }

@@ -1,5 +1,4 @@
 import { notFound, redirect } from 'next/navigation'
-import DocumentTitle from '@/components/DocumentTitle'
 import { Pencil, ShieldCheck, Check, Minus } from 'lucide-react'
 import { dbGetUser } from '@/lib/db'
 import { fmtDate } from '@/lib/format'
@@ -31,7 +30,6 @@ export default async function UserDetailPage({ params }: { params: { id: string 
           <Avatar name={String(user.name)} size={48} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <DocumentTitle title={String(String(user.name))} />
               <h1 className="text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900">{String(user.name)}</h1>
               {isAdmin ? <Badge tone="accent"><ShieldCheck size={12} /> Administrator</Badge> : <Badge>Standard user</Badge>}
               <Badge tone={active ? 'success' : 'neutral'} dot>{active ? 'Active' : 'Inactive'}</Badge>

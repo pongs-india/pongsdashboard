@@ -1,5 +1,4 @@
 import { Pencil } from 'lucide-react'
-import DocumentTitle from '@/components/DocumentTitle'
 import type { Quote } from '@/lib/types'
 import { StatusBadge } from '@/components/ui'
 import QuoteNextStep from '@/components/QuoteNextStep'
@@ -44,7 +43,6 @@ export default function QuoteHeader({
             {rev > 0 && <span className="badge-neutral">Revision {rev}</span>}
             <StatusBadge status={quote.status ?? 'draft'} />
           </div>
-          <DocumentTitle title={`${quote.quoteNumber ?? 'Quote'} · ${quote.clientName || 'Untitled client'}`} />
           <h1 className="mt-2 text-xl sm:text-[22px] font-semibold tracking-tight text-gray-900 truncate">{quote.clientName || 'Untitled client'}</h1>
           <p className="mt-1 text-[13px] text-gray-500">
             {[quote.projectName, quote.location, `${quote.company ?? 'STC'} · ${TIER_LABEL[quote.priceTier] ?? quote.priceTier}${quote.markupPercent > 0 ? ` +${quote.markupPercent}%` : ''}`, date ? `Issued ${date}` : null, valid ? `Valid until ${valid}` : null]
