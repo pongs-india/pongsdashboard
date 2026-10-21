@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Save, Loader2, BookUser, Trash2, ChevronDown, Search, Calculator } from 'lucide-react'
 import { v4 as uuid } from 'uuid'
 import { useRouter } from 'next/navigation'
@@ -208,8 +208,19 @@ export default function QuoteBuilder({ initial, mode, title, description }: Prop
 
   const saveLabel = mode === 'edit' ? 'Save changes' : 'Save quote'
 
+  // ⌘S / Ctrl+S saves, like any desktop editor (and stops the browser's "Save page").
+  const saveRef = useRef(handleSave)
+  saveRef.current = handleSave
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveRef.current() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
-    <div>
+    <div className="pb-20 xl:pb-0">
       <PageHeader
         title={title}
         description={description}
@@ -219,12 +230,27 @@ export default function QuoteBuilder({ initial, mode, title, description }: Prop
             <button onClick={() => saveQuote('internal')} disabled={savingInternal || saving} className="btn-secondary">
               {savingInternal ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Calculator size={15} /> Save and review costs</>}
             </button>
-            <button onClick={handleSave} disabled={saving || savingInternal} className="btn-primary">
+            <button onClick={handleSave} disabled={saving || savingInternal} className="btn-primary" title="Save (⌘S)">
               {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> {saveLabel}</>}
             </button>
           </>
         }
       />
+
+      {/* Below desktop the summary sits at the end of a long form: keep the
+          running total and the save action within reach. */}
+      <div className="xl:hidden fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-2.5 lg:left-[var(--sidebar-w)]"
+        style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xs font-medium text-gray-500">Grand total</p>
+            <p className="truncate text-base font-semibold tabular-nums text-gray-900">{preview ? fmtINR(preview.grandTotal) : "—"}</p>
+          </div>
+          <button onClick={handleSave} disabled={saving || savingInternal} className="btn-primary shrink-0">
+            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : <><Save size={15} /> {saveLabel}</>}
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
         {/* Main form */}
