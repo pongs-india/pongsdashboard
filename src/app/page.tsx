@@ -6,7 +6,7 @@ import { useMe, can } from '@/lib/useMe'
 import type { Quote } from '@/lib/types'
 import { calculateQuote, fmtINR } from '@/lib/calculations'
 import { fmtDate, fmtDateLong, monthShort, toDate } from '@/lib/format'
-import { PageHeader, Stat, StatGrid, StatusBadge, EmptyState, LoadingRows, PageLoading } from '@/components/ui'
+import { PageHeader, Stat, StatGrid, StatusBadge, StatusPill, EmptyState, LoadingRows, PageLoading } from '@/components/ui'
 import { AttentionCard, GettingStarted, type SetupStep } from '@/components/Guidance'
 import { buildAttention } from '@/lib/attention'
 import { navigate } from '@/lib/navigate'
@@ -41,6 +41,7 @@ export default function HomePage() {
   const [userCount, setUserCount] = useState<number | null>(null)
   const [pendingRequests, setPendingRequests] = useState(0)
   const [loadError, setLoadError] = useState('')
+  const [health, setHealth] = useState<{ ok: boolean; ms: number } | null>(null)
   const f = useFilters({ period: 'fy', from: '', to: '', company: '', owner: '' })
 
   const canQuotes = can(me, 'quotes', 'view')
@@ -52,6 +53,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!me) return
+    fetch('/api/health').then(r => r.json()).then(setHealth).catch(() => setHealth({ ok: false, ms: 0 }))
     if (canQuotes) fetch('/api/quotes').then(async r => {
       const d = await r.json().catch(() => null)
       if (!r.ok) setLoadError((d && d.error) ? String(d.error) : `The server returned ${r.status}.`)
@@ -150,7 +152,22 @@ export default function HomePage() {
           attentionLoading ? fmtDateLong(new Date(), { weekday: true })
             : `${fmtDateLong(new Date(), { weekday: true })} · ${attention.length === 0 ? 'Nothing needs your attention' : `${attention.length} ${attention.length === 1 ? 'thing needs' : 'things need'} your attention`}`
         }
-        actions={canQuotes ? <a href="/quotes/new" className="btn-primary"><Plus size={15} strokeWidth={2.25} /> New quote</a> : undefined}
+        actions={<>
+          {health && (health.ok
+            ? <StatusPill tone="success" title={`Database answered in ${health.ms} ms`}>System online</StatusPill>
+            : <StatusPill tone="danger" title="The app cannot reach its database">Database offline</StatusPill>)}
+          {canInventory && lowStock && (lowStock.length > 0
+            ? <StatusPill tone={lowStock.some(x => Number(x.current_stock ?? 0) <= 0) ? 'danger' : 'warning'} href="/inventory/reorder">
+                {lowStock.length} {lowStock.length === 1 ? 'product' : 'products'} below minimum</StatusPill>
+            : <StatusPill tone="success" href="/inventory">Stock healthy</StatusPill>)}
+          {canQuotes && quotes && sentAwaiting.length > 0 && (
+            <StatusPill tone="info" href="/quotes?status=sent">{sentAwaiting.length} {sentAwaiting.length === 1 ? 'quote' : 'quotes'} awaiting decision</StatusPill>
+          )}
+          {isAdmin && pendingRequests > 0 && (
+            <StatusPill tone="warning" href="/admin/access-requests">{pendingRequests} access {pendingRequests === 1 ? 'request' : 'requests'}</StatusPill>
+          )}
+          {canQuotes && <a href="/quotes/new" className="btn-primary"><Plus size={15} strokeWidth={2.25} /> New quote</a>}
+        </>}
       />
 
       {loadError && (

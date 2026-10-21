@@ -447,3 +447,20 @@ export function NextStep({
     </section>
   )
 }
+
+/** A status pill for page headers: coloured dot plus a short sentence
+ *  ("Database online", "4 products below minimum"). Links when it has somewhere to go. */
+export function StatusPill({ tone = 'neutral', href, title, children }: {
+  tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral'; href?: string; title?: string; children: ReactNode
+}) {
+  const cls = {
+    success: 'bg-success-soft text-success ring-success-line', warning: 'bg-warning-soft text-warning ring-warning-line',
+    danger: 'bg-danger-soft text-danger ring-danger-line', info: 'bg-info-soft text-info ring-info-line', neutral: 'bg-surface-alt text-muted ring-line',
+  }[tone]
+  const dot = { success: 'bg-success-fill', warning: 'bg-warning-fill', danger: 'bg-danger-fill', info: 'bg-info-fill', neutral: 'bg-line-hover' }[tone]
+  const body = <><span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />{children}</>
+  const base = `inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[13px] font-medium ring-1 ring-inset ${cls}`
+  return href
+    ? <a href={href} title={title} className={`${base} transition-[filter] hover:brightness-[0.97]`}>{body}</a>
+    : <span title={title} className={base}>{body}</span>
+}
