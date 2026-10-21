@@ -123,12 +123,15 @@ function breadcrumbs(pathname: string) {
   if (parts.length === 0) return [{ href: '/', label: 'Dashboard' }]
   const crumbs: { href: string; label: string }[] = []
   let acc = ''
-  for (const p of parts) {
+  const COLLECTIONS = new Set(['quotes', 'projects', 'clients', 'users', 'products'])
+  parts.forEach((p, i) => {
     acc += '/' + p
-    if (p === 'admin') continue
-    const label = SEGMENT_LABELS[p] ?? (/^[0-9a-z-]{6,}$/i.test(p) && /\d/.test(p) ? 'Details' : p)
+    if (p === 'admin') return
+    // A segment right after a collection is a record id unless it's a known sub-page.
+    const isRecord = i > 0 && COLLECTIONS.has(parts[i - 1]) && !SEGMENT_LABELS[p]
+    const label = isRecord ? 'Details' : SEGMENT_LABELS[p] ?? p
     crumbs.push({ href: acc, label })
-  }
+  })
   return crumbs
 }
 

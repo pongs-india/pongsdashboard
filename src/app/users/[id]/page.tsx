@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import { Pencil, ShieldCheck } from 'lucide-react'
+import { Pencil, ShieldCheck, Check, Minus } from 'lucide-react'
 import { dbGetUser } from '@/lib/db'
 import { fmtDate } from '@/lib/format'
 import { getSessionUser, SEED_ADMIN_EMAIL } from '@/lib/session'
@@ -59,7 +59,9 @@ export default async function UserDetailPage({ params }: { params: { id: string 
                       <td><Badge tone={ACCESS_TONE[lvl]}>{ACCESS_LABEL[lvl]}</Badge></td>
                       {ACTIONS.map(a => (
                         <td key={a} className="text-center hidden sm:table-cell">
-                          {p?.[a] ? <span className="text-brand-700" aria-label="Allowed">Yes</span> : <span className="text-gray-300" aria-label="Not allowed">No</span>}
+                          {p?.[a]
+                            ? <Check size={15} strokeWidth={2.25} className="inline text-success-600" aria-label="Allowed" />
+                            : <Minus size={15} className="inline text-gray-300" aria-label="Not allowed" />}
                         </td>
                       ))}
                     </tr>

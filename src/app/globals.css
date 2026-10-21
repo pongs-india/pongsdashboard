@@ -191,12 +191,13 @@
   .badge-warning { @apply badge bg-amber-50 text-amber-800 ring-amber-200/80; }
   .badge-danger  { @apply badge bg-red-50 text-red-700 ring-red-200/80; }
   .badge-info::before, .badge-success::before, .badge-warning::before, .badge-danger::before,
-  .badge-accent::before, .badge-dot::before {
+  .badge-dot::before {
     content: '';
     @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
   }
   .badge-dot::before { @apply bg-gray-400; }
-  .badge-info::before, .badge-accent::before { @apply bg-brand-600; }
+  /* Accent badges mark a role or emphasis, not a status: no dot. */
+  .badge-info::before { @apply bg-brand-600; }
   .badge-success::before { @apply bg-success-600; }
   .badge-warning::before { @apply bg-amber-500; }
   .badge-danger::before { @apply bg-red-600; }
