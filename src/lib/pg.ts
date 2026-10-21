@@ -1,0 +1,85 @@
+import postgres from 'postgres'
+
+// Thin adapter over Supabase Postgres that keeps the `execute(sql, args)` →
+// `{ rows }` shape the app was written against (libsql/Turso). Queries are
+// still written in the SQLite dialect the codebase grew up with; `toPostgres`
+// rewrites the handful of constructs that differ so call sites stay unchanged.
+
+export type InValue = string | number | boolean | null | undefined
+export type Row = Record<string, unknown>
+export interface ResultSet { rows: Row[]; rowsAffected: number }
+export interface DbClient { execute(sql: string, args?: InValue[]): Promise<ResultSet> }
+
+// Timestamps are stored as UTC text ('YYYY-MM-DD HH:MM:SS'), exactly as
+// SQLite's datetime('now') wrote them, so existing string comparisons and
+// substr()/LIKE month filters keep working on migrated rows.
+const NOW_TEXT = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')`
+
+export function toPostgres(sql: string): string {
+  let out = sql
+    .replace(/datetime\('now'\)/gi, NOW_TEXT)
+    // SQLite REAL is 8 bytes; Postgres REAL is 4 and would round money.
+    .replace(/\bREAL\b/g, 'DOUBLE PRECISION')
+    .replace(/\bADD COLUMN (?!IF NOT EXISTS)/gi, 'ADD COLUMN IF NOT EXISTS ')
+    // SQLite LIKE is case-insensitive for ASCII; ILIKE keeps search behaviour.
+    .replace(/\bLIKE\b/g, 'ILIKE')
+  // Positional `?` → `$n`, skipping anything inside quoted literals.
+  let n = 0
+  let quote: string | null = null
+  let res = ''
+  for (const ch of out) {
+    if (quote) {
+      if (ch === quote) quote = null
+      res += ch
+    } else if (ch === "'" || ch === '"') {
+      quote = ch
+      res += ch
+    } else if (ch === '?') {
+      res += `$${++n}`
+    } else {
+      res += ch
+    }
+  }
+  out = res
+  return out
+}
+
+let _sql: ReturnType<typeof postgres> | null = null
+
+function connection() {
+  if (!_sql) {
+    const url = process.env.DATABASE_URL
+    if (!url) throw new Error('DATABASE_URL env var not set')
+    _sql = postgres(url, {
+      // Supabase's transaction pooler (port 6543) does not support prepared statements.
+      prepare: false,
+      ssl: 'require',
+      max: 5,
+      idle_timeout: 20,
+      // "column already exists, skipping" from idempotent migrations is expected.
+      onnotice: () => {},
+      // COUNT/SUM over integers come back as int8/numeric; the app treats them as numbers.
+      types: {
+        bigint: { to: 20, from: [20], serialize: (x: number) => String(x), parse: (x: string) => Number(x) },
+        numeric: { to: 1700, from: [1700], serialize: (x: number) => String(x), parse: (x: string) => Number(x) },
+      },
+    })
+  }
+  return _sql
+}
+
+const CREATE_TABLE = /^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)/i
+
+export const db: DbClient = {
+  async execute(sql, args = []) {
+    const conn = connection()
+    const params = args.map(a => (a === undefined ? null : typeof a === 'boolean' ? (a ? 1 : 0) : a))
+    const result = await conn.unsafe(toPostgres(sql), params as (string | number | null)[])
+    // Supabase exposes the public schema over its REST API. The app talks to
+    // Postgres directly as the owner (which bypasses RLS), so every table gets
+    // RLS switched on with no policies: unreachable through the anon key.
+    const created = CREATE_TABLE.exec(sql)
+    if (created) await conn.unsafe(`ALTER TABLE ${created[1]} ENABLE ROW LEVEL SECURITY`)
+    return { rows: Array.from(result) as Row[], rowsAffected: result.count ?? 0 }
+  },
+}

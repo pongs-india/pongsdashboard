@@ -1,20 +1,12 @@
 import { teamMembersList } from '@/lib/team'
-import { createClient, type InValue } from '@libsql/client'
+import { db as pgClient, type InValue } from './pg'
 import type { Quote } from './types'
 import { fullPermissions, parsePermissions, permissionsForLegacyRole } from './permissions'
 import { hashPassword } from './password'
 import { calculateQuote } from './calculations'
 
-let _client: ReturnType<typeof createClient> | null = null
-
 function getClient() {
-  if (!_client) {
-    const url = process.env.TURSO_URL
-    const authToken = process.env.TURSO_AUTH_TOKEN
-    if (!url) throw new Error('TURSO_URL env var not set')
-    _client = createClient({ url, authToken })
-  }
-  return _client
+  return pgClient
 }
 
 let _quotesInit = false
@@ -276,7 +268,15 @@ export function getDbClient() {
   return getClient()
 }
 
-export async function initInventoryTables() {
+let _inventoryInit: Promise<void> | null = null
+export function initInventoryTables() {
+  // Memoised: this runs on nearly every request, and each DDL statement is a
+  // network round trip to Postgres. A failed attempt is retried next call.
+  _inventoryInit ??= createInventoryTables().catch(e => { _inventoryInit = null; throw e })
+  return _inventoryInit
+}
+
+async function createInventoryTables() {
   const db = getClient()
   const tables = [
     `CREATE TABLE IF NOT EXISTS inv_products (

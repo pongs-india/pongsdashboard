@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
 
   const id = crypto.randomUUID()
   await db.execute(
-    `INSERT OR REPLACE INTO access_requests (id, name, email, phone, city, requested_role, reason) VALUES (?,?,?,?,?,?,?)`,
+    `INSERT INTO access_requests (id, name, email, phone, city, requested_role, reason) VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT (email) DO UPDATE SET id=excluded.id, name=excluded.name, phone=excluded.phone, city=excluded.city,
+       requested_role=excluded.requested_role, reason=excluded.reason, status='pending',
+       reviewed_by=NULL, reviewed_at=NULL, notes=NULL, created_at=excluded.created_at`,
     [id, b.name, b.email.toLowerCase(), b.phone ?? null, b.city ?? null, b.requested_role ?? 'viewer', b.reason ?? null]
   )
   return NextResponse.json({ ok: true, id }, { status: 201 })
