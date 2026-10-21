@@ -28,8 +28,10 @@ export type Col = {
   total?: boolean
   /** Custom cell. The plain value (row[key] or sortValue) still drives search, sort and export. */
   render?: (row: Row) => ReactNode
-  /** Value used for sorting and export when it differs from row[key]. */
+  /** Value used for display, search, sorting and export when it differs from row[key]. */
   value?: (row: Row) => string | number | null | undefined
+  /** Sort by this instead (a rank, e.g. urgent before high), without changing what is exported. */
+  sortValue?: (row: Row) => string | number | null | undefined
   /** A second, quieter line under the value (client under project). Searched and exported as its own column. */
   sub?: { key: string; label: string; mono?: boolean }
   /** Label map for kind "status" (e.g. in_progress → In progress). */
@@ -137,12 +139,12 @@ export function DataTable({
     if (!c) return searched
     const blank = (v: unknown) => v === null || v === undefined || v === ''
     return [...searched].sort((a, b) => {
-      const x = plainOf(c, a), y = plainOf(c, b)
+      const x = c.sortValue ? c.sortValue(a) : plainOf(c, a), y = c.sortValue ? c.sortValue(b) : plainOf(c, b)
       // Blanks always sink to the bottom, whichever way the column sorts.
       if (blank(x) && blank(y)) return 0
       if (blank(x)) return 1
       if (blank(y)) return -1
-      const n = isNumberCol(c) || (typeof x === 'number' && typeof y === 'number') ? Number(x) - Number(y) : collator.compare(String(x), String(y))
+      const n = (isNumberCol(c) && !c.sortValue) || (typeof x === 'number' && typeof y === 'number') ? Number(x) - Number(y) : collator.compare(String(x), String(y))
       return n * sort.dir
     })
   }, [searched, sort, cols])

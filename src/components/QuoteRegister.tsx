@@ -144,7 +144,7 @@ export default function QuoteRegister(_props: { variant?: 'dashboard' | 'quotes'
       const expired = u < today() && ['draft', 'sent'].includes(getStatus(r as unknown as Quote))
       return <span className={expired ? 'text-danger' : ''}>{new Date(u).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}{expired && <span className="sr-only"> (expired)</span>}</span>
     } },
-    { key: 'status', label: 'Status', value: r => STATUS_LABELS[getStatus(r as unknown as Quote)], render: r => {
+    { key: 'status', label: 'Status', value: r => STATUS_LABELS[getStatus(r as unknown as Quote)], sortValue: r => STATUSES.indexOf(getStatus(r as unknown as Quote)), render: r => {
       const q = r as unknown as Quote
       const status = getStatus(q)
       return (
