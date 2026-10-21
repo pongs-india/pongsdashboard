@@ -1,21 +1,14 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMe, resetMe } from '@/lib/useMe'
 import { ChevronsUpDown, KeyRound, LogOut, Inbox, ShieldCheck } from 'lucide-react'
 import { Avatar, Badge, Field, Modal } from '@/components/ui'
 
-type User = { id: string; name: string; email: string; role: string; isAdmin?: boolean }
-
 export default function UserMenu() {
-  const [user, setUser] = useState<User | null>(null)
+  const { me: user } = useMe()
   const [open, setOpen] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const router = useRouter()
-
-  useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d?.email ? d : null)).catch(() => {})
-  }, [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
@@ -27,9 +20,8 @@ export default function UserMenu() {
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
-    setUser(null)
-    router.push('/login')
-    router.refresh()
+    resetMe()
+    window.location.assign('/login')
   }
 
   if (!user) {
@@ -41,7 +33,7 @@ export default function UserMenu() {
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
-        className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-200/60 transition-colors">
+        className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-gray-100 transition-colors">
         <Avatar name={user.name} size={28} />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-[13px] font-medium text-gray-900">{user.name}</span>
