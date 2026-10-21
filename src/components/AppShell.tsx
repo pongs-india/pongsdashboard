@@ -164,12 +164,21 @@ function useClientNavigation() {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/'
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { me, loading: meLoading } = useMe()
+  const { me, loading: meLoading, error: meError } = useMe()
   useClientNavigation()
 
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
-  if (BARE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))) {
+  // The middleware only sees that a session cookie exists. If the session has
+  // expired or been revoked, send the user to sign in and bring them back here.
+  const bare = BARE_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))
+  useEffect(() => {
+    if (!bare && !meLoading && !meError && !me) {
+      window.location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`)
+    }
+  }, [bare, meLoading, meError, me])
+
+  if (bare) {
     return <>{children}</>
   }
 
