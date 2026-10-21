@@ -112,7 +112,7 @@ function AnalyticsInner() {
                       <span className="flex items-center gap-2 text-gray-800"><span className={`dot ${statusDot(s.status)}`} />{humanize(s.status)}</span>
                       <span className="tabular-nums text-gray-500"><span className="font-medium text-gray-900">{s.count}</span> · {pct.toFixed(0)}%</span>
                     </div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-gray-100"><div className="h-1.5 rounded-full bg-gray-700" style={{ width: `${pct}%` }} /></div>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-gray-100"><div className={`h-1.5 rounded-full ${statusDot(s.status)}`} style={{ width: `${pct}%` }} /></div>
                   </li>
                 )
               })}
