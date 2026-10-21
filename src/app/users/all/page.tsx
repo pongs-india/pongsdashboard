@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Pencil, Trash2, Users, ShieldCheck } from 'lucide-react'
 import Gate from '@/components/Gate'
 import { useNewParam } from '@/lib/useNewParam'
@@ -10,8 +10,8 @@ import {
   MODULES, MODULE_LABELS, ACTIONS, emptyPermissions,
   parsePermissions, type UserPermissions, type ModuleName, type ActionName,
 } from '@/lib/permissions'
-import { navigate } from '@/lib/navigate'
-import { useSort, SortHeader, usePagination, Pagination, downloadCsv, ExportButton } from '@/components/table'
+import { DataTable, type Col } from '@/components/DataTable'
+import { useFilters, FilterSelect, optionsFrom } from '@/components/filters'
 
 interface User {
   id: string; name: string; email: string; phone: string; city: string
@@ -44,22 +44,21 @@ function AllUsersInner() {
   useNewParam(() => setShowForm(true))
   const [form, setForm] = useState<FormState>(emptyForm())
   const [editId, setEditId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const flt = useFilters({ access: '', status: '', module: '', city: '', password: '' })
+  const fv = flt.values
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [pendingEdit, setPendingEdit] = useState<string | null>(null)
 
   function load() {
-    let url = '/api/users'
-    const params: string[] = []
-    if (roleFilter) params.push(`access_level=${encodeURIComponent(roleFilter)}`)
-    if (statusFilter) params.push(`status=${encodeURIComponent(statusFilter)}`)
-    if (params.length) url += '?' + params.join('&')
-    fetch(url).then(r => r.json()).then(d => { setUsers(Array.isArray(d) ? d : []); setLoading(false) })
+    setLoading(true)
+    fetch('/api/users')
+      .then(async r => { const d = await r.json().catch(() => null); if (!r.ok) throw new Error(d?.error || `The server returned ${r.status}.`); return d })
+      .then(d => { setUsers(Array.isArray(d) ? d : []); setLoadError(''); setLoading(false) })
+      .catch(e => { setLoadError(e instanceof Error ? e.message : 'Could not reach the server.'); setLoading(false) })
   }
-  useEffect(() => { load() }, [roleFilter, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [])
 
   // /users/all?edit=<id> opens that user's editor (linked from the user page).
   useEffect(() => {
@@ -95,10 +94,11 @@ function AllUsersInner() {
       const d = await res.json().catch(() => ({}))
       setError(d.error ?? 'Could not save the user.'); return
     }
+    toast(editId ? 'User updated' : 'User added')
     setShowForm(false); setForm(emptyForm()); setEditId(null); load()
   }
   async function handleDelete(u: User) {
-    const ok = await confirmDialog({ title: 'Delete user', body: `${u.name} will no longer be able to sign in. Their past activity stays in the log.`, confirmLabel: 'Delete user', tone: 'danger' })
+    const ok = await confirmDialog({ title: 'Delete user', body: `${u.name} will no longer be able to sign in. Their past activity stays in the log, and an administrator can restore the account from the audit log for 30 days (the password will need to be set again).`, confirmLabel: 'Delete user', tone: 'danger' })
     if (!ok) return
     const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' })
     if (!res.ok) { const d = await res.json().catch(() => ({})); toast('Could not delete the user', { tone: 'error', description: d.error }); return }
@@ -131,106 +131,68 @@ function AllUsersInner() {
     setForm(f => ({ ...f, permissions: { ...f.permissions, [module]: { view: on, create: on, edit: on, delete: on } } }))
   }
 
-  const q = search.toLowerCase()
-  const filtered = users.filter(u => !q || u.name.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q) || (u.city ?? '').toLowerCase().includes(q))
-  const isAdminUser = (u: User) => u.role === 'admin' || u.access_level === 'admin'
-  const { sorted, sort, toggle } = useSort(filtered, {
-    name: u => u.name,
-    city: u => u.city,
-    access: u => (isAdminUser(u) ? 0 : 1),
-    status: u => u.status,
-  }, { key: 'name', dir: 'asc' })
-  const pager = usePagination(sorted, 25)
-  const exportCsv = () => downloadCsv('pongs-users', ['Name', 'Email', 'Phone', 'City', 'Access', 'Status', 'Added'],
-    sorted.map(u => [u.name, u.email, u.phone, u.city, isAdminUser(u) ? 'Admin' : 'Standard', u.status, String(u.created_at ?? '').slice(0, 10)]))
+  const isAdminUser = (u: User) => (u.role ?? u.access_level) === 'admin'
+  const rows = useMemo(() => users.map(u => {
+    const admin = isAdminUser(u)
+    const perms = parsePermissions(u.permissions_json)
+    const mods = MODULES.filter(m => perms[m]?.view)
+    return { ...u, admin, access: admin ? 'Admin' : 'Standard', modules: admin ? 'All modules' : mods.map(m => MODULE_LABELS[m]).join(', '), modKeys: admin ? [...MODULES] : mods, added: String(u.created_at ?? '').slice(0, 10) }
+  }).filter(u =>
+    (!fv.access || (fv.access === 'admin' ? u.admin : !u.admin)) && (!fv.status || u.status === fv.status) &&
+    (!fv.module || (u.modKeys as string[]).includes(fv.module)) && (!fv.city || u.city === fv.city) &&
+    (!fv.password || (fv.password === 'set' ? u.has_password : !u.has_password))), [users, fv])
+
+  const cols: Col[] = [
+    { key: 'name', label: 'User', sub: { key: 'email', label: 'Email' }, render: r => (
+      <div className="flex items-center gap-3"><Avatar name={String(r.name)} size={30} /><a href={`/users/${r.id}`} className="truncate">{String(r.name)}</a></div>
+    ) },
+    { key: 'phone', label: 'Phone', hideBelow: 'md' },
+    { key: 'city', label: 'City', hideBelow: 'lg' },
+    { key: 'access', label: 'Access', sortValue: r => (r.admin ? 0 : 1),
+      render: r => r.admin ? <Badge tone="accent"><ShieldCheck size={12} /> Admin</Badge> : <Badge>Standard</Badge> },
+    { key: 'modules', label: 'Modules', hideBelow: 'xl', className: 'max-w-[260px] truncate', render: r => r.modules ? <span className="text-[12px] text-muted">{String(r.modules)}</span> : <span className="text-[12px] text-faint">No modules</span> },
+    { key: 'status', label: 'Status', value: r => (r.status === 'active' ? 'Active' : 'Inactive'), render: r => (
+      <><Badge tone={r.status === 'active' ? 'success' : 'neutral'} dot>{r.status === 'active' ? 'Active' : 'Inactive'}</Badge>
+        {!r.has_password && r.status === 'active' && <div className="mt-0.5 text-[11px] text-faint">No password yet</div>}</>
+    ) },
+    { key: 'added', label: 'Added', kind: 'date', hideBelow: 'xl' },
+  ]
 
   return (
     <div className="page">
       <PageHeader
         title="All users"
         description="Everyone who can sign in. Access is set per user."
-        actions={<>
-          <ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />
-          <button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add user</button>
-        </>}
+        actions={<button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add user</button>}
       />
 
-      <div className="table-wrap">
-        <div className="flex flex-col gap-3 border-b border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="segmented" role="group" aria-label="Access">
-              {[['', 'Everyone'], ['admin', 'Admins'], ['viewer', 'Standard']].map(([v, l]) => (
-                <button key={v} type="button" aria-pressed={roleFilter === v} data-active={roleFilter === v} onClick={() => setRoleFilter(v)}>{l}</button>
-              ))}
-            </div>
-            <div className="segmented" role="group" aria-label="Status">
-              {[['', 'Any status'], ['active', 'Active'], ['inactive', 'Inactive']].map(([v, l]) => (
-                <button key={v} type="button" aria-pressed={statusFilter === v} data-active={statusFilter === v} onClick={() => setStatusFilter(v)}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, city" />
-        </div>
-        {loading ? <LoadingRows rows={5} cols={5} /> : filtered.length === 0 ? (
-          <EmptyState icon={Users} title={users.length ? 'No users match' : 'No users yet'}
-            description={users.length ? 'Try a different name, email or city.' : 'Add the people who quote, install and manage jobs, with access to just the modules they need.'}
-            action={users.length ? undefined : <button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary"><Plus size={15} /> Add user</button>} />
-        ) : (
-          <div className="table-scroll">
-            <table className="table table-hover">
-              <thead>
-                <tr>
-                  <SortHeader label="User" sortKey="name" sort={sort} onSort={toggle} />
-                  <th className="hidden md:table-cell">Phone</th>
-                  <SortHeader label="City" sortKey="city" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
-                  <SortHeader label="Access" sortKey="access" sort={sort} onSort={toggle} />
-                  <th className="hidden xl:table-cell">Modules</th>
-                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={toggle} />
-                  <th className="w-20"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pager.pageRows.map(u => {
-                  const admin = (u.role ?? u.access_level) === 'admin'
-                  const perms = parsePermissions(u.permissions_json)
-                  const mods = MODULES.filter(m => perms[m]?.view)
-                  return (
-                    <tr key={u.id} className="cursor-pointer" onClick={e => {
-                      if ((e.target as HTMLElement).closest('button,a')) return
-                      navigate(`/users/${u.id}`, e)
-                    }}>
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <Avatar name={u.name} size={30} />
-                          <div className="min-w-0">
-                            <a href={`/users/${u.id}`} className="block truncate font-medium text-gray-900 hover:underline">{u.name}</a>
-                            <div className="truncate text-xs text-gray-500">{u.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="hidden md:table-cell">{u.phone || '—'}</td>
-                      <td className="hidden lg:table-cell">{u.city || '—'}</td>
-                      <td>{admin ? <Badge tone="accent"><ShieldCheck size={12} /> Admin</Badge> : <Badge>Standard</Badge>}</td>
-                      <td className="hidden xl:table-cell text-xs text-gray-600 max-w-[240px] truncate">
-                        {admin ? 'All modules' : mods.length ? mods.map(m => MODULE_LABELS[m]).join(', ') : <span className="text-gray-400">No modules</span>}
-                      </td>
-                      <td>
-                        <Badge tone={u.status === 'active' ? 'success' : 'neutral'} dot>{u.status === 'active' ? 'Active' : 'Inactive'}</Badge>
-                        {!u.has_password && u.status === 'active' && <div className="mt-0.5 text-2xs text-gray-500">No password yet</div>}
-                      </td>
-                      <td className="text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(u)} className="btn-ghost btn-icon" aria-label={`Edit ${u.name}`}><Pencil size={14} /></button>
-                        <button onClick={() => handleDelete(u)} className="btn-ghost btn-icon text-gray-400 hover:text-red-700 hover:bg-red-50" aria-label={`Delete ${u.name}`}><Trash2 size={14} /></button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {!loading && sorted.length > 0 && <Pagination {...pager} noun="users" />}
-      </div>
+      <DataTable
+        title="Users"
+        cols={cols}
+        rows={rows as unknown as Record<string, unknown>[]}
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        rowHref={r => `/users/${r.id}`}
+        initialSort={{ key: 'name', dir: 1 }}
+        searchPlaceholder="Search name, email, city"
+        rowActions={r => [
+          { icon: 'open', label: `Open ${r.name}`, href: `/users/${r.id}` },
+          { icon: 'edit', label: `Edit ${r.name}`, onClick: () => openEdit(r as unknown as User) },
+          { icon: 'trash', label: `Delete ${r.name}`, tone: 'danger', onClick: () => handleDelete(r as unknown as User) },
+        ]}
+        filters={<>
+          <FilterSelect value={fv.access} onChange={x => flt.set({ access: x })} all="Any access" className="w-full sm:w-36" options={[{ value: 'admin', label: 'Admins' }, { value: 'standard', label: 'Standard' }]} />
+          <FilterSelect value={fv.status} onChange={x => flt.set({ status: x })} all="Any status" className="w-full sm:w-36" options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
+          <FilterSelect value={fv.module} onChange={x => flt.set({ module: x })} all="Any module" className="w-full sm:w-44" options={MODULES.map(m => ({ value: m, label: `Can use ${MODULE_LABELS[m]}` }))} />
+          <FilterSelect value={fv.city} onChange={x => flt.set({ city: x })} all="All cities" className="w-full sm:w-40" options={optionsFrom(users, u => u.city)} />
+          <FilterSelect value={fv.password} onChange={x => flt.set({ password: x })} all="Password set or not" className="w-full sm:w-48" options={[{ value: 'set', label: 'Password set' }, { value: 'unset', label: 'No password yet' }]} />
+        </>}
+        filtersActive={flt.active}
+        onClearFilters={flt.clear}
+        empty={{ icon: Users, title: 'No users yet', description: 'Add the people who quote, install and manage jobs, with access to just the modules they need.',
+          action: <button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null); setError('') }} className="btn-primary btn-sm"><Plus size={14} /> Add user</button> }}
+      />
 
       {showForm && (
         <Modal title={editId ? `Edit ${form.name || 'user'}` : 'Add user'} onClose={() => { setShowForm(false); setEditId(null) }} width="max-w-2xl"
