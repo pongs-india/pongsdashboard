@@ -6,17 +6,14 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] bg-white">
       <div className="flex flex-col px-6 py-8 sm:px-12 lg:px-16">
-        <a href="/login" className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-700 text-white text-sm font-bold">P</span>
-          <span className="leading-tight">
-            <span className="block text-sm font-semibold text-gray-900">Pongs</span>
-            <span className="block text-2xs text-gray-500">Stretch ceiling operations</span>
-          </span>
+        <a href="/login" className="inline-flex w-fit" aria-label="Pongs India">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pongs-logo.png" alt="Pongs India" width={96} height={40} className="h-10 w-auto" />
         </a>
         <div className="flex flex-1 items-center py-12">
           <div className="w-full max-w-[380px] mx-auto lg:mx-0 lg:ml-[8%]">{children}</div>
         </div>
-        <p className="text-xs text-gray-400">Next Level Solutions · Pongs India, Bengaluru</p>
+        <p className="text-xs text-gray-500">© Pongs India · Next Level Solutions, Bengaluru</p>
       </div>
 
       <div

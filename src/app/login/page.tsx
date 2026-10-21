@@ -1,6 +1,6 @@
 'use client'
 import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import AuthLayout from '@/components/AuthLayout'
 import { Field } from '@/components/ui'
@@ -12,9 +12,10 @@ function LoginForm() {
   const [firstTime, setFirstTime] = useState(false) // account has no password yet
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') || '/'
+  // Same-origin paths only: `//host` or `/\host` would leave the app (open redirect).
+  const rawNext = searchParams.get('next') || '/'
+  const next = /^\/(?![\/\\])/.test(rawNext) ? rawNext : '/'
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -42,8 +43,8 @@ function LoginForm() {
       setLoading(false)
       return
     }
-    router.push(next)
-    router.refresh()
+    // Full load: the shell and every cached user lookup start fresh as the new user.
+    window.location.assign(next)
   }
 
   return (
