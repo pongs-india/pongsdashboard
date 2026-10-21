@@ -1,8 +1,11 @@
 'use client'
-import { Fragment, useEffect, useState } from 'react'
-import { Plus, Trash2, ChevronRight, ShoppingCart } from 'lucide-react'
-import { PageHeader, EmptyState, LoadingRows, SearchInput, StatusBadge, Modal, Field, Stat, StatGrid } from '@/components/ui'
-import { fmtINR, fmtDate } from '@/lib/format'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus, Trash2, ShoppingCart } from 'lucide-react'
+import { PageHeader, Modal, Field, Stat, StatGrid } from '@/components/ui'
+import { DataTable, type Col } from '@/components/DataTable'
+import { useFilters, FilterSelect, DateRange, inPeriod, optionsFrom } from '@/components/filters'
+import { useNewParam } from '@/lib/useNewParam'
+import { fmtINR } from '@/lib/format'
 import { Select, DatePicker } from '@/components/controls'
 import { toast } from '@/components/feedback'
 
@@ -23,26 +26,30 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm())
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const f = useFilters({ status: '', supplier: '', from: '', to: '' })
+  const v = f.values
+  useNewParam(() => setShowForm(true))
 
-  function load() {
+  const load = useCallback(() => {
+    setLoading(true)
     Promise.all([
-      fetch('/api/inventory/purchases').then(r => r.json()),
-      fetch('/api/inventory/suppliers').then(r => r.json()),
-      fetch('/api/inventory/products').then(r => r.json()),
+      fetch('/api/inventory/purchases').then(async r => { const d = await r.json().catch(() => null); if (!r.ok) throw new Error(d?.error || `The server returned ${r.status}.`); return d }),
+      fetch('/api/inventory/suppliers').then(r => (r.ok ? r.json() : [])).catch(() => []),
+      fetch('/api/inventory/products').then(r => (r.ok ? r.json() : [])).catch(() => []),
     ]).then(([p, s, pr]) => {
-      setPurchases(Array.isArray(p) ? p : []); setSuppliers(Array.isArray(s) ? s : []); setProducts(Array.isArray(pr) ? pr : []); setLoading(false)
-    })
-  }
-  useEffect(() => { load() }, [])
+      setPurchases(Array.isArray(p) ? p : []); setSuppliers(Array.isArray(s) ? s : []); setProducts(Array.isArray(pr) ? pr : [])
+      setLoadError(''); setLoading(false)
+    }).catch(e => { setLoadError(e instanceof Error ? e.message : 'Could not reach the server.'); setLoading(false) })
+  }, [])
+  useEffect(() => { load() }, [load])
 
   function updateItem(idx: number, field: keyof PurchaseItem, value: string | number) {
-    setForm(f => {
-      const items = [...f.items]
+    setForm(x => {
+      const items = [...x.items]
       items[idx] = { ...items[idx], [field]: value }
       if (field === 'quantity' || field === 'unit_price') {
         items[idx].total_price = Number(items[idx].quantity) * Number(items[idx].unit_price)
@@ -51,7 +58,7 @@ export default function PurchasesPage() {
         const prod = products.find(p => p.id === value)
         if (prod) { items[idx].description = prod.name; items[idx].unit = prod.unit; items[idx].unit_price = prod.cost_price; items[idx].total_price = Number(items[idx].quantity) * prod.cost_price }
       }
-      return { ...f, items }
+      return { ...x, items }
     })
   }
 
@@ -63,19 +70,29 @@ export default function PurchasesPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, supplier_name: sup?.name ?? form.supplier_name }),
-    })
+    }).catch(() => null)
     setSaving(false)
-    if (!res.ok) { toast('Could not save the purchase order', { tone: 'error' }); return }
+    if (!res?.ok) { toast('Could not save the purchase order', { tone: 'error' }); return }
     toast(`Purchase order ${form.purchase_number} saved`)
     setShowForm(false); setForm(emptyForm()); load()
   }
 
-  const q = search.toLowerCase()
-  const filtered = purchases.filter(p => !q || (p.purchase_number ?? '').toLowerCase().includes(q) || (p.supplier_name ?? '').toLowerCase().includes(q))
+  const rows = useMemo(() => purchases.map(p => ({ ...p, lines: (p.items ?? []).length })).filter(p =>
+    (!v.status || p.status === v.status) && (!v.supplier || p.supplier_name === v.supplier) && inPeriod(p.purchase_date, { from: v.from, to: v.to })),
+  [purchases, v])
   const thirty = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)
-  const recent = purchases.filter(p => (p.purchase_date ?? '') >= thirty)
-  const pending = purchases.filter(p => p.status === 'pending')
+  const recent = rows.filter(p => (p.purchase_date ?? '') >= thirty)
+  const pending = rows.filter(p => p.status === 'pending')
   const formTotal = form.items.reduce((s, i) => s + Number(i.total_price), 0)
+
+  const cols: Col[] = [
+    { key: 'purchase_number', label: 'Order', kind: 'mono' },
+    { key: 'supplier_name', label: 'Supplier' },
+    { key: 'purchase_date', label: 'Date', kind: 'date', hideBelow: 'sm' },
+    { key: 'lines', label: 'Lines', kind: 'int', hideBelow: 'md' },
+    { key: 'status', label: 'Status', kind: 'status' },
+    { key: 'total_amount', label: 'Total', kind: 'money', total: true },
+  ]
 
   return (
     <div className="page">
@@ -86,90 +103,75 @@ export default function PurchasesPage() {
       />
 
       <StatGrid cols={3}>
-        <Stat label="Spend, last 30 days" value={loading ? null : fmtINR(recent.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${recent.length} orders`} />
-        <Stat label="Awaiting delivery" value={loading ? null : pending.length} hint={fmtINR(pending.reduce((s, p) => s + Number(p.total_amount || 0), 0))} tone={pending.length ? 'warning' : 'neutral'} />
-        <Stat label="All-time spend" value={loading ? null : fmtINR(purchases.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${purchases.length} orders`} />
+        <Stat label="Spend, last 30 days" value={loading ? null : fmtINR(recent.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={loading ? undefined : `${recent.length} orders`} />
+        <Stat label="Awaiting delivery" value={loading ? null : pending.length} hint={loading ? undefined : fmtINR(pending.reduce((s, p) => s + Number(p.total_amount || 0), 0))} tone={pending.length ? 'warning' : 'neutral'} />
+        <Stat label="Spend, filtered orders" value={loading ? null : fmtINR(rows.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={loading ? undefined : `${rows.length} orders`} />
       </StatGrid>
 
-      <div className="table-wrap">
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-3">
-          <span className="text-xs text-gray-500 pl-1">Select an order to see its lines</span>
-          <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search order or supplier" />
-        </div>
-        {loading ? <LoadingRows rows={4} cols={5} /> : filtered.length === 0 ? (
-          <EmptyState icon={ShoppingCart} title={purchases.length ? 'No orders match' : 'No purchases yet'}
-            action={!purchases.length ? <button className="btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> New purchase</button> : undefined} />
-        ) : (
-          <div className="table-scroll">
-            <table className="table table-hover">
-              <thead><tr><th className="w-8" /><th>Order</th><th>Supplier</th><th className="hidden sm:table-cell">Date</th><th className="hidden md:table-cell num">Lines</th><th>Status</th><th className="num">Total</th></tr></thead>
-              <tbody>
-                {filtered.map(p => {
-                  const open = expanded === p.id
-                  return (
-                    <Fragment key={p.id}>
-                      <tr className="cursor-pointer" onClick={() => setExpanded(open ? null : p.id)} aria-expanded={open}>
-                        <td className="pr-0"><ChevronRight size={14} className={`text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} /></td>
-                        <td className="mono text-xs font-medium text-gray-900">{p.purchase_number || '—'}</td>
-                        <td>{p.supplier_name || '—'}</td>
-                        <td className="hidden sm:table-cell whitespace-nowrap tabular-nums">{fmtDate(p.purchase_date)}</td>
-                        <td className="hidden md:table-cell num">{(p.items ?? []).length}</td>
-                        <td><StatusBadge status={p.status} /></td>
-                        <td className="num font-medium text-gray-900">{fmtINR(p.total_amount)}</td>
-                      </tr>
-                      {open && (
-                        <tr className="bg-gray-50/70 hover:bg-gray-50/70">
-                          <td />
-                          <td colSpan={6} className="py-3">
-                            {(p.items ?? []).length === 0 ? <p className="text-xs text-gray-500">No line items on this order.</p> : (
-                              <table className="w-full text-xs">
-                                <thead><tr className="text-gray-500"><th className="text-left font-medium pb-1.5">Item</th><th className="text-right font-medium pb-1.5">Quantity</th><th className="text-right font-medium pb-1.5">Unit price</th><th className="text-right font-medium pb-1.5">Amount</th></tr></thead>
-                                <tbody>
-                                  {p.items.map((item, i) => (
-                                    <tr key={i} className="border-t border-gray-200/70">
-                                      <td className="py-1.5 text-gray-800">{item.description || '—'}</td>
-                                      <td className="py-1.5 text-right tabular-nums text-gray-700">{item.quantity} {item.unit}</td>
-                                      <td className="py-1.5 text-right tabular-nums text-gray-700">{fmtINR(item.unit_price)}</td>
-                                      <td className="py-1.5 text-right tabular-nums font-medium text-gray-900">{fmtINR(item.total_price)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                            {p.notes && <p className="mt-2 text-xs text-gray-500">{p.notes}</p>}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DataTable
+        title="Purchase orders"
+        exportTitle="Purchase orders"
+        cols={cols}
+        rows={rows as unknown as Record<string, unknown>[]}
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        initialSort={{ key: 'purchase_date', dir: -1 }}
+        searchPlaceholder="Search order or supplier"
+        expand={r => {
+          const p = r as unknown as Purchase
+          return (p.items ?? []).length === 0 ? <p className="text-[12px] text-faint">No line items on this order.</p> : (
+            <div>
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-faint"><th className="pb-1.5 text-left font-medium">Item</th><th className="pb-1.5 text-right font-medium">Quantity</th><th className="pb-1.5 text-right font-medium">Unit price</th><th className="pb-1.5 text-right font-medium">Amount</th></tr></thead>
+                <tbody>
+                  {p.items.map((item, i) => (
+                    <tr key={i} className="border-t border-line">
+                      <td className="py-1.5 text-ink">{item.description || '—'}</td>
+                      <td className="py-1.5 text-right tabular-nums text-muted">{item.quantity} {item.unit}</td>
+                      <td className="py-1.5 text-right tabular-nums text-muted">{fmtINR(item.unit_price)}</td>
+                      <td className="py-1.5 text-right font-medium tabular-nums text-ink">{fmtINR(item.total_price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {p.notes && <p className="mt-2 text-[12px] text-faint">{p.notes}</p>}
+            </div>
+          )
+        }}
+        filters={<>
+          <FilterSelect value={v.status} onChange={x => f.set({ status: x })} all="All statuses" className="w-full sm:w-40"
+            options={[{ value: 'received', label: 'Received' }, { value: 'pending', label: 'Pending' }, { value: 'cancelled', label: 'Cancelled' }]} />
+          <FilterSelect value={v.supplier} onChange={x => f.set({ supplier: x })} all="All suppliers" className="w-full sm:w-52" options={optionsFrom(purchases, p => p.supplier_name)} />
+          <DateRange label="Ordered" from={v.from} to={v.to} onChange={(from, to) => f.set({ from, to })} className="w-full sm:w-auto" />
+        </>}
+        filtersActive={f.active}
+        onClearFilters={f.clear}
+        empty={{ icon: ShoppingCart, title: 'No purchases yet', description: 'Record orders placed with suppliers. Received orders add their quantities to stock.',
+          action: <button className="btn-primary btn-sm" onClick={() => setShowForm(true)}><Plus size={14} /> New purchase</button> }}
+      />
 
       {showForm && (
         <Modal title="New purchase order" onClose={() => { setShowForm(false); setForm(emptyForm()) }} width="max-w-3xl"
           footer={<>
-            <span className="mr-auto text-[13px] text-gray-600">Total <span className="ml-1 font-semibold text-gray-900 tabular-nums">{fmtINR(formTotal)}</span></span>
+            <span className="mr-auto text-[13px] text-muted">Total <span className="ml-1 font-semibold text-ink tabular-nums">{fmtINR(formTotal)}</span></span>
             <button type="button" onClick={() => { setShowForm(false); setForm(emptyForm()) }} className="btn-secondary">Cancel</button>
             <button type="submit" form="purchase-form" className="btn-primary" disabled={saving || !form.purchase_number}>{saving ? 'Saving…' : 'Save purchase'}</button>
           </>}>
           <form id="purchase-form" onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <Field label="Order number" required>
-                <input required value={form.purchase_number} onChange={e => setForm(f => ({ ...f, purchase_number: e.target.value }))} className="input mono" placeholder="PO-2043" autoFocus />
+                <input required value={form.purchase_number} onChange={e => setForm(x => ({ ...x, purchase_number: e.target.value }))} className="input mono" placeholder="PO-2043" autoFocus />
               </Field>
               <Field label="Date" required>
-                <DatePicker required clearable={false} value={form.purchase_date} onChange={v => setForm(f => ({ ...f, purchase_date: v }))} ariaLabel="Order date" />
+                <DatePicker required clearable={false} value={form.purchase_date} onChange={val => setForm(x => ({ ...x, purchase_date: val }))} ariaLabel="Order date" />
               </Field>
               <Field label="Supplier">
-                <Select value={form.supplier_id} onChange={v => setForm(f => ({ ...f, supplier_id: v }))} ariaLabel="Supplier" placeholder="Select supplier"
+                <Select value={form.supplier_id} onChange={val => setForm(x => ({ ...x, supplier_id: val }))} ariaLabel="Supplier" placeholder="Select supplier"
                   clearable options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
               </Field>
               <Field label="Status">
-                <Select value={form.status} onChange={v => setForm(f => ({ ...f, status: v }))} ariaLabel="Status" options={[
+                <Select value={form.status} onChange={val => setForm(x => ({ ...x, status: val }))} ariaLabel="Status" options={[
                   { value: 'received', label: 'Received', description: 'Adds the quantities to stock' },
                   { value: 'pending', label: 'Pending' },
                   { value: 'cancelled', label: 'Cancelled' },
@@ -180,7 +182,7 @@ export default function PurchasesPage() {
             <div className="rounded-md border border-gray-200">
               <div className="flex items-center justify-between px-3 h-10 border-b border-gray-200 bg-gray-50 rounded-t-md">
                 <span className="text-xs font-medium text-gray-700">Order lines</span>
-                <button type="button" onClick={() => setForm(f => ({ ...f, items: [...f.items, emptyItem()] }))} className="btn-ghost btn-xs"><Plus size={13} /> Add line</button>
+                <button type="button" onClick={() => setForm(x => ({ ...x, items: [...x.items, emptyItem()] }))} className="btn-ghost btn-xs"><Plus size={13} /> Add line</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px] min-w-[620px]">
@@ -189,7 +191,7 @@ export default function PurchasesPage() {
                     {form.items.map((item, idx) => (
                       <tr key={idx}>
                         <td className="px-3 py-1.5">
-                          <Select size="sm" value={item.product_id} onChange={v => updateItem(idx, 'product_id', v)} ariaLabel="Product" placeholder="Select product"
+                          <Select size="sm" value={item.product_id} onChange={val => updateItem(idx, 'product_id', val)} ariaLabel="Product" placeholder="Select product"
                             minPanelWidth={260} options={products.map(p => ({ value: p.id, label: p.name }))} />
                         </td>
                         <td className="px-2 py-1.5"><input placeholder="Description" value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} className="input h-8 text-xs" aria-label="Description" /></td>
@@ -197,7 +199,7 @@ export default function PurchasesPage() {
                         <td className="px-2 py-1.5"><input type="number" min="0" step="any" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))} className="input h-8 text-xs text-right tabular-nums" aria-label="Unit price" /></td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-medium text-gray-900">{fmtINR(item.total_price)}</td>
                         <td className="px-2 py-1.5 text-right">
-                          <button type="button" onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))} disabled={form.items.length === 1}
+                          <button type="button" onClick={() => setForm(x => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))} disabled={form.items.length === 1}
                             className="btn-ghost btn-icon h-7 w-7 text-gray-400 hover:text-red-700" aria-label="Remove line"><Trash2 size={13} /></button>
                         </td>
                       </tr>
@@ -208,7 +210,7 @@ export default function PurchasesPage() {
             </div>
 
             <Field label="Notes">
-              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="input resize-none" />
+              <textarea value={form.notes} onChange={e => setForm(x => ({ ...x, notes: e.target.value }))} rows={2} className="input resize-none" />
             </Field>
           </form>
         </Modal>

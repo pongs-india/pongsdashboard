@@ -1,8 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, ClipboardCheck } from 'lucide-react'
-import { PageHeader, EmptyState, LoadingRows, StatusBadge, Modal, Field, SearchInput } from '@/components/ui'
-import { fmtINR, fmtDate } from '@/lib/format'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus, ClipboardCheck } from 'lucide-react'
+import { PageHeader, Modal, Field, Stat, StatGrid } from '@/components/ui'
+import { DataTable, type Col } from '@/components/DataTable'
+import { useFilters, FilterSelect, DateRange, inPeriod, optionsFrom } from '@/components/filters'
+import { fmtINR } from '@/lib/format'
 import { Select, DatePicker } from '@/components/controls'
 import { confirmDialog, toast } from '@/components/feedback'
 
@@ -16,30 +18,36 @@ const STATUSES: [string, string][] = [['completed', 'Completed'], ['in_progress'
 export default function WorkCompletionPage() {
   const [jobs, setJobs] = useState<WorkCompletion[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm())
   const [editId, setEditId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const flt = useFilters({ status: '', location: '', from: '', to: '' })
+  const fv = flt.values
 
-  function load() {
-    fetch('/api/inventory/work-completions').then(r => r.json()).then(d => { setJobs(Array.isArray(d) ? d : []); setLoading(false) })
-  }
-  useEffect(() => { load() }, [])
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/inventory/work-completions')
+      .then(async r => { const d = await r.json().catch(() => null); if (!r.ok) throw new Error(d?.error || `The server returned ${r.status}.`); return d })
+      .then(d => { setJobs(Array.isArray(d) ? d : []); setLoadError(''); setLoading(false) })
+      .catch(e => { setLoadError(e instanceof Error ? e.message : 'Could not reach the server.'); setLoading(false) })
+  }, [])
+  useEffect(() => { load() }, [load])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    if (editId) {
-      await fetch(`/api/inventory/work-completions/${editId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-    } else {
-      await fetch('/api/inventory/work-completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-    }
+    const res = await fetch(editId ? `/api/inventory/work-completions/${editId}` : '/api/inventory/work-completions', {
+      method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+    }).catch(() => null)
     setSaving(false)
+    if (!res?.ok) { toast('Could not save the job record. Check the details and try again.', { tone: 'error' }); return }
+    toast(editId ? 'Job record updated' : 'Job record added')
     setShowForm(false); setForm(emptyForm()); setEditId(null); load()
   }
   async function handleDelete(j: WorkCompletion) {
-    const ok = await confirmDialog({ title: 'Delete job record', body: `The record for "${j.project_name}" will be permanently removed.`, confirmLabel: 'Delete record', tone: 'danger' })
+    const ok = await confirmDialog({ title: 'Delete job record', body: `The record for "${j.project_name}" will be deleted. An administrator can restore it from the audit log for 30 days.`, confirmLabel: 'Delete record', tone: 'danger' })
     if (!ok) return
     const res = await fetch(`/api/inventory/work-completions/${j.id}`, { method: 'DELETE' })
     if (res.ok) toast('Job record deleted'); else toast('Could not delete the job record', { tone: 'error' })
@@ -50,8 +58,16 @@ export default function WorkCompletionPage() {
     setEditId(j.id); setShowForm(true)
   }
 
-  const q = search.toLowerCase()
-  const filtered = jobs.filter(j => !q || j.project_name.toLowerCase().includes(q) || (j.client_name ?? '').toLowerCase().includes(q) || (j.location ?? '').toLowerCase().includes(q))
+  const rows = useMemo(() => jobs.filter(j =>
+    (!fv.status || j.status === fv.status) && (!fv.location || j.location === fv.location) && inPeriod(j.completion_date, { from: fv.from, to: fv.to })), [jobs, fv])
+  const cols: Col[] = [
+    { key: 'completion_date', label: 'Completed', kind: 'date' },
+    { key: 'project_name', label: 'Project', sub: { key: 'client_name', label: 'Client' }, render: r => <span className="font-medium">{String(r.project_name)}</span> },
+    { key: 'location', label: 'Location', hideBelow: 'md' },
+    { key: 'status', label: 'Status', kind: 'status', labels: Object.fromEntries(STATUSES) },
+    { key: 'amount', label: 'Amount', kind: 'money', total: true },
+    { key: 'notes', label: 'Notes', hideBelow: 'xl' },
+  ]
 
   return (
     <div className="page">
@@ -61,37 +77,36 @@ export default function WorkCompletionPage() {
         actions={<button onClick={() => { setShowForm(true); setForm(emptyForm()); setEditId(null) }} className="btn-primary"><Plus size={15} strokeWidth={2.25} /> Add job</button>}
       />
 
-      <div className="table-wrap">
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-3">
-          <span className="text-xs text-gray-500 pl-1">{jobs.length} job record{jobs.length !== 1 ? 's' : ''}</span>
-          <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search project, client, location" />
-        </div>
-        {loading ? <LoadingRows rows={4} cols={5} /> : filtered.length === 0 ? (
-          <EmptyState icon={ClipboardCheck} title={jobs.length ? 'No jobs match' : 'No job records yet'}
-            action={!jobs.length ? <button className="btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> Add job</button> : undefined} />
-        ) : (
-          <div className="table-scroll">
-            <table className="table table-hover">
-              <thead><tr><th>Completed</th><th>Project</th><th className="hidden md:table-cell">Location</th><th>Status</th><th className="num">Amount</th><th className="w-20"><span className="sr-only">Actions</span></th></tr></thead>
-              <tbody>
-                {filtered.map(j => (
-                  <tr key={j.id}>
-                    <td className="whitespace-nowrap tabular-nums">{fmtDate(j.completion_date)}</td>
-                    <td><div className="font-medium text-gray-900">{j.project_name}</div>{j.client_name && <div className="text-xs text-gray-500">{j.client_name}</div>}</td>
-                    <td className="hidden md:table-cell">{j.location || '—'}</td>
-                    <td><StatusBadge status={j.status} /></td>
-                    <td className="num font-medium text-gray-900">{j.amount ? fmtINR(j.amount) : '—'}</td>
-                    <td className="text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(j)} className="btn-ghost btn-icon" aria-label={`Edit ${j.project_name}`}><Pencil size={14} /></button>
-                      <button onClick={() => handleDelete(j)} className="btn-ghost btn-icon text-gray-400 hover:text-red-700 hover:bg-red-50" aria-label={`Delete ${j.project_name}`}><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <StatGrid cols={3}>
+        <Stat label="Job records" value={loading ? null : rows.length} hint={loading ? undefined : `${rows.filter(j => j.status === 'completed').length} completed`} />
+        <Stat label="Value" value={loading ? null : fmtINR(rows.reduce((s, j) => s + Number(j.amount || 0), 0))} hint={loading ? undefined : 'Across the filtered jobs'} />
+        <Stat label="Pending or in progress" value={loading ? null : rows.filter(j => ['pending', 'in_progress'].includes(j.status)).length} hint={loading ? undefined : 'Not yet reconciled'} />
+      </StatGrid>
+
+      <DataTable
+        title="Jobs"
+        exportTitle="Work completion"
+        cols={cols}
+        rows={rows as unknown as Record<string, unknown>[]}
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        initialSort={{ key: 'completion_date', dir: -1 }}
+        searchPlaceholder="Search project, client, location"
+        rowActions={r => [
+          { icon: 'edit', label: `Edit ${r.project_name}`, onClick: () => openEdit(r as unknown as WorkCompletion) },
+          { icon: 'trash', label: `Delete ${r.project_name}`, tone: 'danger', onClick: () => handleDelete(r as unknown as WorkCompletion) },
+        ]}
+        filters={<>
+          <FilterSelect value={fv.status} onChange={x => flt.set({ status: x })} all="All statuses" options={STATUSES.map(([value, label]) => ({ value, label }))} />
+          <FilterSelect value={fv.location} onChange={x => flt.set({ location: x })} all="All locations" className="w-full sm:w-52" options={optionsFrom(jobs, j => j.location)} />
+          <DateRange label="Completed" from={fv.from} to={fv.to} onChange={(from, to) => flt.set({ from, to })} className="w-full sm:w-auto" />
+        </>}
+        filtersActive={flt.active}
+        onClearFilters={flt.clear}
+        empty={{ icon: ClipboardCheck, title: 'No job records yet', description: 'Record finished jobs to reconcile the materials they used.',
+          action: <button className="btn-primary btn-sm" onClick={() => setShowForm(true)}><Plus size={14} /> Add job</button> }}
+      />
 
       {showForm && (
         <Modal title={editId ? 'Edit job record' : 'Add job record'} onClose={() => { setShowForm(false); setEditId(null) }}

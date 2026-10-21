@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ShoppingCart, ArrowDownLeft, ArrowUpRight, Activity } from 'lucide-react'
 import { PageHeader, EmptyState, LoadingRows } from '@/components/ui'
+import { useFilters, PeriodFilter, resolvePeriod, inPeriod } from '@/components/filters'
 import { fmtINR, fmtDate } from '@/lib/format'
 
 interface ActivityItem {
@@ -10,15 +11,17 @@ interface ActivityItem {
 }
 
 const ICON = {
-  purchase: { icon: ShoppingCart, cls: 'bg-gray-100 text-gray-700' },
-  in: { icon: ArrowDownLeft, cls: 'bg-brand-50 text-brand-700' },
-  out: { icon: ArrowUpRight, cls: 'bg-gray-100 text-gray-700' },
+  purchase: { icon: ShoppingCart, cls: 'bg-info-soft text-info' },
+  in: { icon: ArrowDownLeft, cls: 'bg-success-soft text-success' },
+  out: { icon: ArrowUpRight, cls: 'bg-surface-alt text-muted' },
 }
 
 export default function ActivityPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'purchase' | 'movement'>('all')
+  const [error, setError] = useState('')
+  const flt = useFilters({ kind: '', period: '3m', from: '', to: '' })
+  const fv = flt.values
 
   useEffect(() => {
     Promise.all([
@@ -48,10 +51,12 @@ export default function ActivityPage() {
       items.sort((a, b) => String(b.date).localeCompare(String(a.date)))
       setActivity(items)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => { setError('Could not reach the server.'); setLoading(false) })
   }, [])
 
-  const filtered = activity.filter(a => filter === 'all' || (filter === 'purchase' ? a.kind === 'purchase' : a.kind !== 'purchase'))
+  const period = resolvePeriod(fv.period, fv.from, fv.to)
+  const filtered = activity.filter(a =>
+    (!fv.kind || (fv.kind === 'purchase' ? a.kind === 'purchase' : fv.kind === 'in' ? a.kind === 'in' : a.kind === 'out')) && inPeriod(a.date, period))
   // Group by day for a readable feed.
   const groups: { day: string; items: ActivityItem[] }[] = []
   for (const a of filtered) {
@@ -66,38 +71,45 @@ export default function ActivityPage() {
       <PageHeader
         title="Inventory activity"
         description="Purchases and stock movements, newest first."
-        actions={
-          <div className="segmented">
-            <button data-active={filter === 'all'} onClick={() => setFilter('all')}>All</button>
-            <button data-active={filter === 'purchase'} onClick={() => setFilter('purchase')}>Purchases</button>
-            <button data-active={filter === 'movement'} onClick={() => setFilter('movement')}>Movements</button>
-          </div>
-        }
       />
 
-      <div className="card max-w-4xl">
-        {loading ? <LoadingRows rows={6} cols={3} /> : groups.length === 0 ? (
-          <EmptyState icon={Activity} title="No activity yet" description="Purchases and stock movements will appear here." />
+      <div className="no-print flex flex-wrap items-center gap-2">
+        <div className="seg" role="group" aria-label="Type">
+          {[['', 'All'], ['purchase', 'Purchases'], ['in', 'Received'], ['out', 'Issued']].map(([val, l]) => (
+            <button key={val} type="button" aria-pressed={fv.kind === val} data-active={fv.kind === val} onClick={() => flt.set({ kind: val })}>{l}</button>
+          ))}
+        </div>
+        <PeriodFilter period={fv.period} from={fv.from} to={fv.to} dateLabel="Date" onChange={x => flt.set(x)} />
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="card-head"><h2 className="card-title">Activity</h2>{!loading && <span className="count">{filtered.length} {filtered.length === 1 ? 'entry' : 'entries'} · {period.label}</span>}</div>
+        {loading ? <LoadingRows rows={6} cols={3} /> : error ? (
+          <div className="p-4"><div className="alert-error" role="alert">{error}</div></div>
+        ) : groups.length === 0 ? (
+          activity.length
+            ? <EmptyState title="Nothing in this period" description="Activity exists, but the filters hide it." action={<button type="button" className="btn-secondary btn-sm" onClick={flt.clear}>Clear filters</button>} />
+            : <EmptyState icon={Activity} title="No activity yet" description="Purchases and stock movements will appear here." />
         ) : groups.map(g => (
           <div key={g.day}>
-            <p className="sticky top-14 z-10 border-b border-gray-100 bg-gray-50/95 px-5 py-2 text-xs font-medium text-gray-500 backdrop-blur first:rounded-t-lg">{fmtDate(g.day)}</p>
-            <ul className="divide-y divide-gray-100">
+            <p className="sticky top-14 z-10 border-y border-line bg-surface-alt/95 px-4 py-2 text-[12px] font-medium text-faint backdrop-blur first:border-t-0">{fmtDate(g.day)}</p>
+            <ul className="divide-y divide-line">
               {g.items.map(item => {
                 const { icon: Icon, cls } = ICON[item.kind]
                 const body = (
                   <>
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${cls}`}><Icon size={15} /></span>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cls}`}><Icon size={15} /></span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium text-gray-900">{item.title}</span>
-                      <span className="block truncate text-xs text-gray-500">{item.details}</span>
+                      <span className="block truncate text-[13.5px] font-medium text-ink">{item.title}</span>
+                      <span className="block truncate text-[12px] text-faint">{item.details}</span>
                     </span>
                   </>
                 )
                 return (
                   <li key={item.id}>
                     {item.href
-                      ? <a href={item.href} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">{body}</a>
-                      : <div className="flex items-center gap-3 px-5 py-3">{body}</div>}
+                      ? <a href={item.href} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-alt">{body}</a>
+                      : <div className="flex items-center gap-3 px-4 py-3">{body}</div>}
                   </li>
                 )
               })}

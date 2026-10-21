@@ -85,7 +85,7 @@ const collator = new Intl.Collator('en-IN', { numeric: true, sensitivity: 'base'
 export function DataTable({
   title, cols, rows, rowKey = 'id', exportTitle, pageSize = 25, loading, error, onRetry,
   toolbar, actions, filters, filtersActive, onClearFilters, empty, rowHref, onRowClick, rowActions,
-  initialSort, searchPlaceholder = 'Search', hideSearch, summary, embedded, bare, note, rowClass,
+  initialSort, searchPlaceholder = 'Search', hideSearch, summary, embedded, bare, note, rowClass, expand,
 }: {
   title?: string
   cols: Col[]
@@ -121,8 +121,11 @@ export function DataTable({
   /** Added to exports and printouts, e.g. the active filters. */
   note?: string
   rowClass?: (row: Row) => string
+  /** Details shown under a row when it is opened (order lines, history). Clicking the row toggles it. */
+  expand?: (row: Row) => ReactNode
 }) {
   const [q, setQ] = useState('')
+  const [opened, setOpened] = useState<Set<string>>(new Set())
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(initialSort ?? null)
   const [size, setSize] = useState(pageSize)
   const [page, setPage] = useState(0)
@@ -158,7 +161,7 @@ export function DataTable({
   const hasTotals = Object.keys(totals).length > 0
   const align = (c: Col) => c.align ?? (isNumberCol(c) ? 'right' : 'left')
   const ta = (c: Col) => ({ left: 'text-left', right: 'text-right tabular-nums', center: 'text-center' })[align(c)]
-  const clickable = !!(rowHref || onRowClick)
+  const clickable = !!(rowHref || onRowClick || expand)
 
   const exportCols: ExportCol[] = cols.filter(c => !c.noExport).flatMap(c => {
     const base: ExportCol = { key: c.key, label: c.label, kind: c.kind, total: c.total }
@@ -179,12 +182,14 @@ export function DataTable({
     }
   }
 
-  const colCount = cols.length + (rowActions ? 1 : 0)
+  const colCount = cols.length + (rowActions ? 1 : 0) + (expand ? 1 : 0)
+  const toggle = (k: string) => setOpened(o => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n })
 
   const open = (r: Row, e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button,a,input,[role=menu]')) return
     if (rowHref) navigate(rowHref(r), e)
-    else onRowClick?.(r)
+    else if (onRowClick) onRowClick(r)
+    else if (expand) toggle(String(r[rowKey]))
   }
 
   const header = !embedded && (
@@ -221,6 +226,7 @@ export function DataTable({
         <table className="table">
           <thead>
             <tr>
+              {expand && <th className="w-8 !pr-0" aria-label="Details" />}
               {cols.map(c => {
                 const active = sort?.key === c.key
                 const Icon = !active ? ChevronsUpDown : sort!.dir === 1 ? ArrowUp : ArrowDown
@@ -243,6 +249,7 @@ export function DataTable({
           <tbody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={`sk${i}`} aria-hidden>
+                {expand && <td />}
                 {cols.map((c, j) => (
                   <td key={c.key} className={`${c.hideBelow ? HIDE[c.hideBelow] : ''}`}>
                     <div className={`skeleton h-3 ${align(c) === 'right' ? 'ml-auto' : ''}`} style={{ width: j === 0 ? '60%' : `${30 + ((i + j) % 3) * 15}%` }} />
@@ -257,10 +264,20 @@ export function DataTable({
                   {onRetry && <button type="button" onClick={onRetry} className="font-medium underline underline-offset-2">Retry</button>}</span></div>
               </td></tr>
             )}
-            {!loading && !error && visible.map((r, i) => (
-              <Fragment key={String(r[rowKey] ?? i)}>
-                <tr onClick={clickable ? e => open(r, e) : undefined}
-                  className={`${clickable ? 'cursor-pointer' : ''} hover:bg-surface-alt ${rowClass?.(r) ?? ''}`}>
+            {!loading && !error && visible.map((r, i) => {
+              const k = String(r[rowKey] ?? i)
+              const isOpen = !!expand && opened.has(k)
+              return (
+              <Fragment key={k}>
+                <tr onClick={clickable ? e => open(r, e) : undefined} aria-expanded={expand ? isOpen : undefined}
+                  className={`${clickable ? 'cursor-pointer' : ''} hover:bg-surface-alt ${isOpen ? 'bg-surface-alt' : ''} ${rowClass?.(r) ?? ''}`}>
+                  {expand && (
+                    <td className="w-8 !pr-0">
+                      <button type="button" className="icon-btn !h-7 !w-7" aria-label={isOpen ? 'Hide details' : 'Show details'} aria-expanded={isOpen} onClick={() => toggle(k)}>
+                        <ChevronRight size={14} className={`transition-transform ${isOpen ? 'rotate-90 text-ink' : ''}`} />
+                      </button>
+                    </td>
+                  )}
                   {cols.map(c => (
                     <td key={c.key} className={`${ta(c)} ${c.hideBelow ? HIDE[c.hideBelow] : ''} ${c.className ?? ''}`}>
                       <Cell c={c} r={r} />
@@ -281,8 +298,14 @@ export function DataTable({
                     </td>
                   )}
                 </tr>
+                {isOpen && (
+                  <tr className="bg-surface-alt hover:bg-surface-alt">
+                    <td colSpan={colCount} className="!h-auto !px-4 !py-3">{expand!(r)}</td>
+                  </tr>
+                )}
               </Fragment>
-            ))}
+              )
+            })}
             {!loading && !error && sorted.length === 0 && (
               <tr><td colSpan={colCount} className="!h-auto !p-0 hover:bg-transparent">
                 {q ? <EmptyState icon={Search} title={`Nothing matches “${q}”`} description="Check the spelling, or clear the search." action={<button type="button" className="btn-secondary btn-sm" onClick={() => setQ('')}>Clear search</button>} />
@@ -294,6 +317,7 @@ export function DataTable({
           {hasTotals && !loading && !error && sorted.length > 0 && (
             <tfoot>
               <tr>
+                {expand && <td />}
                 {cols.map((c, i) => (
                   <td key={c.key} className={`${ta(c)} ${c.hideBelow ? HIDE[c.hideBelow] : ''}`}>
                     {c.key in totals ? (c.kind === 'money' ? fmtINR(totals[c.key]) : totals[c.key].toLocaleString('en-IN', { maximumFractionDigits: 2 })) : i === 0 ? 'Total' : ''}
