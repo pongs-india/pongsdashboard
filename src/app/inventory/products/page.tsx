@@ -9,6 +9,7 @@ import { useNewParam } from '@/lib/useNewParam'
 import { Select } from '@/components/controls'
 import { confirmDialog, toast } from '@/components/feedback'
 import { navigate } from '@/lib/navigate'
+import { useSort, SortHeader, usePagination, Pagination, downloadCsv, ExportButton, useUrlState } from '@/components/table'
 
 interface Product {
   id: string; name: string; category: string; sku: string; unit: string
@@ -23,14 +24,19 @@ export default function ProductsPage() {
   useNewParam(() => setShowForm(true))
   const [form, setForm] = useState(empty())
   const [editId, setEditId] = useState<string | null>(null)
-  const [catFilter, setCatFilter] = useState('')
-  const [stockFilter, setStockFilter] = useState<'all' | 'attention'>('all')
-  const [search, setSearch] = useState('')
+  const [catFilter, setCatFilter] = useUrlState('category', '')
+  const [stockParam, setStockFilter] = useUrlState('stock', 'all')
+  const stockFilter = stockParam === 'attention' ? 'attention' : 'all'
+  const [search, setSearch] = useUrlState('q', '')
+  const [loadError, setLoadError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   function load() {
-    fetch('/api/inventory/products').then(r => r.json()).then(d => { setProducts(Array.isArray(d) ? d : []); setLoading(false) })
+    fetch('/api/inventory/products')
+      .then(async r => { const d = await r.json().catch(() => null); if (!r.ok) throw new Error(d?.error || `The server returned ${r.status}.`); return d })
+      .then(d => { setProducts(Array.isArray(d) ? d : []); setLoadError(''); setLoading(false) })
+      .catch(e => { setLoadError(e instanceof Error ? e.message : 'Could not reach the server.'); setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
@@ -38,12 +44,13 @@ export default function ProductsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    if (editId) {
-      await fetch(`/api/inventory/products/${editId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-    } else {
-      await fetch('/api/inventory/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-    }
+    const res = await fetch(editId ? `/api/inventory/products/${editId}` : '/api/inventory/products', {
+      method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+    }).catch(() => null)
     setSaving(false)
+    // Keep the form open with the user's input if the save failed.
+    if (!res?.ok) { toast('Could not save the product. Check the details and try again.', { tone: 'error' }); return }
+    toast(editId ? 'Product updated' : 'Product added')
     setShowForm(false); setEditId(null); setForm(empty()); load()
   }
 
@@ -75,6 +82,20 @@ export default function ProductsPage() {
     const q = search.toLowerCase()
     return !q || p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q)
   })
+  const STOCK_RANK: Record<string, number> = { out: 0, low: 1, ok: 2 }
+  const { sorted, sort, toggle } = useSort(filtered, {
+    name: p => p.name,
+    category: p => p.category,
+    stock: p => Number(p.current_stock),
+    status: p => STOCK_RANK[stockState(Number(p.current_stock), Number(p.min_stock))] ?? 3,
+    cost: p => Number(p.cost_price),
+    sell: p => Number(p.sell_price),
+    value: p => Number(p.current_stock) * Number(p.cost_price),
+  }, { key: 'name', dir: 'asc' })
+  const pager = usePagination(sorted, 25)
+  const exportCsv = () => downloadCsv('pongs-products',
+    ['Product', 'SKU', 'Category', 'Unit', 'In stock', 'Minimum', 'Status', 'Cost (INR)', 'Sell (INR)', 'Stock value (INR)'],
+    sorted.map(p => { const st = stockState(Number(p.current_stock), Number(p.min_stock)); return [p.name, p.sku, p.category, p.unit, Number(p.current_stock), Number(p.min_stock), STOCK_LABEL[st], Number(p.cost_price), Number(p.sell_price), Math.round(Number(p.current_stock) * Number(p.cost_price))] }))
   const value = filtered.reduce((s, p) => s + Number(p.current_stock) * Number(p.cost_price), 0)
 
   return (
@@ -82,7 +103,10 @@ export default function ProductsPage() {
       <PageHeader
         title="Products"
         description="Every stocked item with its levels and prices."
-        actions={<button className="btn-primary" onClick={() => { setEditId(null); setForm(empty()); setShowForm(true) }}><Plus size={15} strokeWidth={2.25} /> Add product</button>}
+        actions={<>
+          <ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />
+          <button className="btn-primary" onClick={() => { setEditId(null); setForm(empty()); setShowForm(true) }}><Plus size={15} strokeWidth={2.25} /> Add product</button>
+        </>}
       />
 
       <div className="table-wrap">
@@ -90,15 +114,17 @@ export default function ProductsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Select size="sm" className="w-52" value={catFilter} onChange={setCatFilter} ariaLabel="Category"
               options={[{ value: '', label: 'All categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
-            <div className="segmented">
-              <button data-active={stockFilter === 'all'} onClick={() => setStockFilter('all')}>All stock</button>
-              <button data-active={stockFilter === 'attention'} onClick={() => setStockFilter('attention')}>Needs attention <span className="tabular-nums text-gray-400">{attentionCount}</span></button>
+            <div className="segmented" role="group" aria-label="Stock level">
+              <button type="button" aria-pressed={stockFilter === 'all'} data-active={stockFilter === 'all'} onClick={() => setStockFilter('all')}>All stock</button>
+              <button type="button" aria-pressed={stockFilter === 'attention'} data-active={stockFilter === 'attention'} onClick={() => setStockFilter('attention')}>Needs attention <span className="tabular-nums text-gray-500">{attentionCount}</span></button>
             </div>
           </div>
           <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or SKU" />
         </div>
 
-        {loading ? <LoadingRows rows={6} cols={6} /> : filtered.length === 0 ? (
+        {loading ? <LoadingRows rows={6} cols={6} /> : loadError ? (
+          <div className="p-5"><div className="alert-error" role="alert"><span><span className="font-medium">Products could not be loaded.</span> {loadError} <button type="button" onClick={load} className="font-medium underline underline-offset-2">Retry</button></span></div></div>
+        ) : filtered.length === 0 ? (
           <EmptyState icon={Package} title={products.length ? 'No products match these filters' : 'No products yet'}
             description={products.length ? 'Try another category or search term.' : 'Add the items you stock to start tracking levels.'}
             action={!products.length ? <button className="btn-primary" onClick={() => setShowForm(true)}><Plus size={15} /> Add product</button> : undefined} />
@@ -107,23 +133,23 @@ export default function ProductsPage() {
             <table className="table table-hover">
               <thead>
                 <tr>
-                  <th>Product</th>
-                  <th className="hidden md:table-cell">Category</th>
-                  <th className="num">In stock</th>
-                  <th className="hidden sm:table-cell">Status</th>
-                  <th className="num hidden lg:table-cell">Cost</th>
-                  <th className="num hidden lg:table-cell">Sell</th>
-                  <th className="num hidden xl:table-cell">Stock value</th>
+                  <SortHeader label="Product" sortKey="name" sort={sort} onSort={toggle} />
+                  <SortHeader label="Category" sortKey="category" sort={sort} onSort={toggle} className="hidden md:table-cell" />
+                  <SortHeader label="In stock" sortKey="stock" sort={sort} onSort={toggle} align="right" />
+                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={toggle} className="hidden sm:table-cell" />
+                  <SortHeader label="Cost" sortKey="cost" sort={sort} onSort={toggle} align="right" className="hidden lg:table-cell" />
+                  <SortHeader label="Sell" sortKey="sell" sort={sort} onSort={toggle} align="right" className="hidden lg:table-cell" />
+                  <SortHeader label="Stock value" sortKey="value" sort={sort} onSort={toggle} align="right" className="hidden xl:table-cell" />
                   <th className="w-20"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(p => {
+                {pager.pageRows.map(p => {
                   const st = stockState(Number(p.current_stock), Number(p.min_stock))
                   return (
                     <tr key={p.id} className="cursor-pointer" onClick={e => {
                       if ((e.target as HTMLElement).closest('button,a')) return
-                      navigate(`/inventory/products/${p.id}`)
+                      navigate(`/inventory/products/${p.id}`, e)
                     }}>
                       <td className="max-w-[280px]">
                         <a href={`/inventory/products/${p.id}`} className="block truncate font-medium text-gray-900 hover:underline">{p.name}</a>
@@ -141,7 +167,7 @@ export default function ProductsPage() {
                       <td className="num hidden xl:table-cell font-medium text-gray-900">{fmtINR(Number(p.current_stock) * Number(p.cost_price))}</td>
                       <td className="text-right whitespace-nowrap">
                         <button className="btn-ghost btn-icon" onClick={() => startEdit(p)} aria-label={`Edit ${p.name}`}><Pencil size={14} /></button>
-                        <button className="btn-ghost btn-icon text-gray-400 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(p)} aria-label={`Delete ${p.name}`}><Trash2 size={14} /></button>
+                        <button className="btn-ghost btn-icon text-gray-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(p)} aria-label={`Delete ${p.name}`}><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   )
@@ -150,8 +176,8 @@ export default function ProductsPage() {
             </table>
           </div>
         )}
-        {!loading && filtered.length > 0 && (
-          <div className="table-footer"><span>{filtered.length} of {products.length} products</span><span className="tabular-nums">Stock value {fmtINR(value)}</span></div>
+        {!loading && !loadError && filtered.length > 0 && (
+          <Pagination {...pager} noun="products" summary={`Stock value ${fmtINR(value)}`} />
         )}
       </div>
 
@@ -169,11 +195,11 @@ export default function ProductsPage() {
             </Field>
             <Field label="SKU"><input className="input mono" value={form.sku} onChange={f('sku')} /></Field>
             <Field label="Unit" hint="For example nos, sqm, mtr, rmt."><input className="input" value={form.unit} onChange={f('unit')} /></Field>
-            <Field label="Minimum stock" hint="Below this the item appears on the reorder list."><input className="input tabular-nums" type="number" value={form.min_stock} onChange={f('min_stock')} /></Field>
-            <Field label="Current stock" hint={editId ? 'Prefer recording a movement so the change is logged.' : undefined}><input className="input tabular-nums" type="number" value={form.current_stock} onChange={f('current_stock')} /></Field>
+            <Field label="Minimum stock" hint="Below this the item appears on the reorder list."><input className="input tabular-nums" type="number" min={0} step="any" inputMode="decimal" value={form.min_stock} onChange={f('min_stock')} /></Field>
+            <Field label="Current stock" hint={editId ? 'Prefer recording a movement so the change is logged.' : undefined}><input className="input tabular-nums" type="number" min={0} step="any" inputMode="decimal" value={form.current_stock} onChange={f('current_stock')} /></Field>
             <div className="hidden sm:block" />
-            <Field label="Cost price (₹)"><input className="input tabular-nums" type="number" value={form.cost_price} onChange={f('cost_price')} /></Field>
-            <Field label="Sell price (₹)"><input className="input tabular-nums" type="number" value={form.sell_price} onChange={f('sell_price')} /></Field>
+            <Field label="Cost price (₹)"><input className="input tabular-nums" type="number" min={0} step="0.01" inputMode="decimal" value={form.cost_price} onChange={f('cost_price')} /></Field>
+            <Field label="Sell price (₹)"><input className="input tabular-nums" type="number" min={0} step="0.01" inputMode="decimal" value={form.sell_price} onChange={f('sell_price')} /></Field>
             <Field label="Notes" className="sm:col-span-2"><textarea className="input resize-none" rows={2} value={form.notes} onChange={f('notes')} /></Field>
           </form>
         </Modal>
