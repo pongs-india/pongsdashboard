@@ -91,7 +91,7 @@ export default async function TeamPage({ params }: { params: { id: string } }) {
 }
 
 function Metric({ label, value, hint, tone, emphasis }: { label: string; value: string; hint?: string; tone?: 'success' | 'danger'; emphasis?: boolean }) {
-  const hintCls = tone === 'success' ? 'text-brand-700' : tone === 'danger' ? 'text-red-700' : 'text-gray-500'
+  const hintCls = tone === 'success' ? 'text-success-700' : tone === 'danger' ? 'text-red-700' : 'text-gray-500'
   return (
     <div className={`px-5 py-4 ${emphasis ? 'col-span-2 lg:col-span-1 bg-gray-50/60' : ''}`}>
       <dt className="text-xs font-medium text-gray-500">{label}</dt>

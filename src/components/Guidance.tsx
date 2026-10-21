@@ -99,7 +99,7 @@ export function GettingStarted({ steps, extra }: { steps: SetupStep[]; extra?: R
           return (
             <li key={s.id} className={`flex items-center gap-3 px-5 py-3 ${isNext ? 'bg-brand-50/40' : ''}`}>
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                s.done ? 'bg-brand-600 text-white' : isNext ? 'bg-white text-brand-700 ring-[1.5px] ring-brand-600' : 'bg-white text-gray-400 ring-1 ring-gray-300'
+                s.done ? 'bg-brand-600 text-white' : isNext ? 'bg-white text-brand-700 ring-[1.5px] ring-brand-600' : 'bg-white text-gray-500 ring-1 ring-gray-300'
               }`}>
                 {s.done ? <Check size={13} strokeWidth={2.5} /> : i + 1}
               </span>

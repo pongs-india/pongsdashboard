@@ -42,10 +42,10 @@ export default function CompletedProjects() {
       />
 
       <StatGrid>
-        <Stat label="Projects" value={loading ? '—' : filtered.length} hint={`${filtered.filter(p => p.status === 'invoiced').length} invoiced`} />
-        <Stat label="Area installed" value={loading ? '—' : `${totalArea.toLocaleString('en-IN')} sqft`} />
-        <Stat label="Contract value" value={loading ? '—' : fmtINR(totalValue)} />
-        <Stat label="Average per project" value={loading ? '—' : filtered.length ? fmtINR(Math.round(totalValue / filtered.length)) : null} />
+        <Stat label="Projects" value={loading ? null : filtered.length} hint={`${filtered.filter(p => p.status === 'invoiced').length} invoiced`} />
+        <Stat label="Area installed" value={loading ? null : `${totalArea.toLocaleString('en-IN')} sqft`} />
+        <Stat label="Contract value" value={loading ? null : fmtINR(totalValue)} />
+        <Stat label="Average per project" value={loading ? null : filtered.length ? fmtINR(Math.round(totalValue / filtered.length)) : '—'} />
       </StatGrid>
 
       <div className="table-wrap">

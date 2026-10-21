@@ -161,7 +161,7 @@ function useClientNavigation() {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/'
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { me } = useMe()
+  const { me, loading: meLoading } = useMe()
   useClientNavigation()
 
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -194,7 +194,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4 pt-1 space-y-4">
-        {sections.map((s, i) => <NavGroup key={i} title={s.title} items={s.items} pathname={pathname} />)}
+        {meLoading ? (
+          <div className="space-y-2 px-2 pt-1" aria-hidden>
+            {[64, 48, 56, 72, 52, 60, 44].map((w, i) => (
+              <div key={i} className="flex h-6 items-center gap-2.5"><span className="skeleton h-4 w-4" /><span className="skeleton h-3" style={{ width: w }} /></div>
+            ))}
+          </div>
+        ) : sections.map((s, i) => <NavGroup key={i} title={s.title} items={s.items} pathname={pathname} />)}
       </nav>
 
       <div className="shrink-0 border-t border-gray-200 p-2">

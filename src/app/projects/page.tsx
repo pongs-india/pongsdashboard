@@ -41,12 +41,12 @@ export default function ProjectsDashboard() {
       />
 
       <StatGrid>
-        <Stat label="Active projects" value={loading ? '—' : active.length}
+        <Stat label="Active projects" value={loading ? null : active.length}
           hint={loading ? ' ' : `${fmtINR(active.reduce((s, p) => s + Number(p.contract_value || 0), 0))} contracted`} />
-        <Stat label="Installs next 7 days" value={loading ? '—' : upcoming.length}
+        <Stat label="Installs next 7 days" value={loading ? null : upcoming.length}
           hint={upcoming[0] ? `Next: ${upcoming[0].name}` : 'Nothing scheduled'} href="/projects/calendar" />
-        <Stat label="Completed this month" value={loading ? '—' : completedMonth.length} hint="By completion date" href="/projects/completed" />
-        <Stat label="Invoiced value" value={loading ? '—' : fmtINR(invoiced.reduce((s, p) => s + Number(p.contract_value || 0), 0))}
+        <Stat label="Completed this month" value={loading ? null : completedMonth.length} hint="By completion date" href="/projects/completed" />
+        <Stat label="Invoiced value" value={loading ? null : fmtINR(invoiced.reduce((s, p) => s + Number(p.contract_value || 0), 0))}
           hint={`${invoiced.length} project${invoiced.length !== 1 ? 's' : ''}`} />
       </StatGrid>
 

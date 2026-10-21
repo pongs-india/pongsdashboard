@@ -33,9 +33,9 @@ export default function ReorderPage() {
       />
 
       <StatGrid cols={3}>
-        <Stat label="Items to reorder" value={loading ? '—' : products.length} tone={products.length ? 'warning' : 'neutral'} hint={products.length ? 'At or below minimum' : 'Nothing to reorder'} />
-        <Stat label="Out of stock" value={loading ? '—' : out} tone={out ? 'danger' : 'neutral'} hint={out ? 'Zero units on hand' : 'None'} />
-        <Stat label="Cost to reach minimum" value={loading ? '—' : fmtINR(shortfallCost)} hint="Shortfall valued at cost price" />
+        <Stat label="Items to reorder" value={loading ? null : products.length} tone={products.length ? 'warning' : 'neutral'} hint={products.length ? 'At or below minimum' : 'Nothing to reorder'} />
+        <Stat label="Out of stock" value={loading ? null : out} tone={out ? 'danger' : 'neutral'} hint={out ? 'Zero units on hand' : 'None'} />
+        <Stat label="Cost to reach minimum" value={loading ? null : fmtINR(shortfallCost)} hint="Shortfall valued at cost price" />
       </StatGrid>
 
       <div className="table-wrap">

@@ -29,6 +29,7 @@ export default function ProjectDetailPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [contractValue, setContractValue] = useState(0)
   const [totalPaid, setTotalPaid] = useState(0)
+  const [financeLoaded, setFinanceLoaded] = useState(false)
   const [totalExpenses, setTotalExpenses] = useState(0)
   const [checklist, setChecklist] = useState<Checklist[]>([])
   const [updates, setUpdates] = useState<Update[]>([])
@@ -53,8 +54,10 @@ export default function ProjectDetailPage() {
   }, [id])
 
   const loadPayments = useCallback(async () => {
-    const r = await fetch(`/api/projects/${id}/payments`)
-    const data = await r.json()
+    const r = await fetch(`/api/projects/${id}/payments`).catch(() => null)
+    const data = r?.ok ? await r.json().catch(() => null) : null
+    if (!data) { toast('Payments could not be loaded', { tone: 'error' }); return }
+    setFinanceLoaded(true)
     setPayments(data.payments || [])
     setExpenses(data.expenses || [])
     setContractValue(data.contractValue || 0)
@@ -191,10 +194,13 @@ export default function ProjectDetailPage() {
       {/* Financials */}
       <section className="card mb-6">
         <dl className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
-          <Money label="Contract value" value={fmtINR(contractValue)} />
-          <Money label="Received" value={fmtINR(totalPaid)} hint={contractValue ? `${paidPct.toFixed(0)}% collected` : undefined} />
-          <Money label="Outstanding" value={fmtINR(outstanding)} tone={outstanding > 0 ? 'warning' : 'success'} hint={outstanding > 0 ? 'Due from client' : 'Fully paid'} />
-          <Money label="Gross profit" value={fmtINR(profit)} tone={profit >= 0 ? 'success' : 'danger'} hint={`${profitPct.toFixed(0)}% after ${fmtINR(totalExpenses)} expenses`} />
+          <Money label="Contract value" loading={!financeLoaded} value={fmtINR(contractValue)} hint={contractValue ? undefined : 'Not set on the project'} />
+          <Money label="Received" loading={!financeLoaded} value={fmtINR(totalPaid)} hint={contractValue ? `${paidPct.toFixed(0)}% collected` : undefined} />
+          <Money label="Outstanding" loading={!financeLoaded} value={fmtINR(outstanding)}
+            tone={!contractValue ? undefined : outstanding > 0 ? 'warning' : 'success'}
+            hint={!contractValue ? 'Set a contract value to track dues' : outstanding > 0 ? 'Due from client' : 'Fully paid'} />
+          <Money label="Gross profit" loading={!financeLoaded} value={fmtINR(profit)} tone={!contractValue ? undefined : profit >= 0 ? 'success' : 'danger'}
+            hint={contractValue ? `${profitPct.toFixed(0)}% after ${fmtINR(totalExpenses)} expenses` : `${fmtINR(totalExpenses)} expenses recorded`} />
         </dl>
         {contractValue > 0 && (
           <div className="px-5 pb-4">
@@ -469,13 +475,19 @@ export default function ProjectDetailPage() {
   )
 }
 
-function Money({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'success' | 'warning' | 'danger' }) {
-  const hintCls = tone === 'success' ? 'text-brand-700' : tone === 'warning' ? 'text-amber-700' : tone === 'danger' ? 'text-red-700' : 'text-gray-500'
+function Money({ label, value, hint, tone, loading }: { label: string; value: string; hint?: string; tone?: 'success' | 'warning' | 'danger'; loading?: boolean }) {
+  const hintCls = tone === 'success' ? 'text-success-700' : tone === 'warning' ? 'text-amber-700' : tone === 'danger' ? 'text-red-700' : 'text-gray-500'
   return (
     <div className="px-5 py-4">
-      <dt className="text-xs font-medium text-gray-500">{label}</dt>
-      <dd className="mt-1 text-lg font-semibold tracking-tight text-gray-900 tabular-nums">{value}</dd>
-      {hint && <dd className={`mt-0.5 text-xs ${hintCls}`}>{hint}</dd>}
+      <dt className="text-[13px] font-medium text-gray-500">{label}</dt>
+      {loading ? (
+        <dd className="mt-2 space-y-2" aria-label="Loading"><span className="skeleton block h-6 w-24" /><span className="skeleton block h-3 w-28" /></dd>
+      ) : (
+        <>
+          <dd className="mt-1 text-xl font-semibold tracking-tight text-gray-900 tabular-nums">{value}</dd>
+          {hint && <dd className={`mt-0.5 text-xs ${hintCls}`}>{hint}</dd>}
+        </>
+      )}
     </div>
   )
 }

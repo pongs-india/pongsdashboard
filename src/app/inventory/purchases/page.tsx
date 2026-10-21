@@ -86,9 +86,9 @@ export default function PurchasesPage() {
       />
 
       <StatGrid cols={3}>
-        <Stat label="Spend, last 30 days" value={loading ? '—' : fmtINR(recent.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${recent.length} orders`} />
-        <Stat label="Awaiting delivery" value={loading ? '—' : pending.length} hint={fmtINR(pending.reduce((s, p) => s + Number(p.total_amount || 0), 0))} tone={pending.length ? 'warning' : 'neutral'} />
-        <Stat label="All-time spend" value={loading ? '—' : fmtINR(purchases.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${purchases.length} orders`} />
+        <Stat label="Spend, last 30 days" value={loading ? null : fmtINR(recent.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${recent.length} orders`} />
+        <Stat label="Awaiting delivery" value={loading ? null : pending.length} hint={fmtINR(pending.reduce((s, p) => s + Number(p.total_amount || 0), 0))} tone={pending.length ? 'warning' : 'neutral'} />
+        <Stat label="All-time spend" value={loading ? null : fmtINR(purchases.reduce((s, p) => s + Number(p.total_amount || 0), 0))} hint={`${purchases.length} orders`} />
       </StatGrid>
 
       <div className="table-wrap">

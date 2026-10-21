@@ -50,7 +50,7 @@ export function Stat({
   tone?: 'neutral' | 'danger' | 'warning' | 'success'
   href?: string
 }) {
-  const hintTone = { neutral: 'text-gray-500', danger: 'text-red-700', warning: 'text-amber-700', success: 'text-brand-700' }[tone]
+  const hintTone = { neutral: 'text-gray-500', danger: 'text-red-700', warning: 'text-amber-700', success: 'text-success-700' }[tone]
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -110,10 +110,10 @@ const TONE_CLASS: Record<Tone, string> = {
 }
 const TONE_DOT: Record<Tone, string> = {
   neutral: 'bg-gray-400',
-  info: 'bg-gray-800',
-  success: 'bg-brand-600',
+  info: 'bg-brand-600',
+  success: 'bg-success-600',
   warning: 'bg-amber-500',
-  danger: 'bg-red-500',
+  danger: 'bg-red-600',
   accent: 'bg-brand-600',
 }
 
@@ -417,7 +417,7 @@ export function NextStep({
   className?: string
 }) {
   const eyebrow = tone === 'done' ? 'All set' : tone === 'attention' ? 'Needs attention' : 'Next step'
-  const eyebrowCls = tone === 'attention' ? 'text-amber-700' : 'text-brand-700'
+  const eyebrowCls = tone === 'attention' ? 'text-amber-700' : tone === 'done' ? 'text-success-700' : 'text-brand-700'
   return (
     <section className={`card overflow-hidden ${className}`} aria-label={eyebrow}>
       {steps && (
