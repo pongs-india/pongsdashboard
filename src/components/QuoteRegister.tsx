@@ -193,22 +193,22 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
       <StatGrid>
         <Stat label={isAdmin ? 'Total quotes' : 'My quotes'} value={loading ? null : quotes.length}
           hint={loading ? ' ' : `${thisMonthQuotes.length} created this month`} />
-        <Stat label="Open pipeline" value={loading ? null : fmtINR(openValue)} hint="Draft and sent" />
+        <Stat label="Open pipeline" value={loading ? null : fmtINR(openValue)} hint={loading ? undefined : 'Draft and sent'} />
         <Stat label="Won" value={loading ? null : fmtINR(approvedValue)}
-          hint={decided ? `${conversionRate}% win rate on decided quotes` : 'No decisions yet'} tone={decided ? 'success' : 'neutral'} />
-        <Stat label="Quoted this month" value={loading ? null : fmtINR(thisMonthValue)} hint={`${fmtINR(value)} across all quotes`} />
+          hint={loading ? undefined : decided ? `${conversionRate}% win rate on decided quotes` : 'No decisions yet'} tone={decided ? 'success' : 'neutral'} />
+        <Stat label="Quoted this month" value={loading ? null : fmtINR(thisMonthValue)} hint={loading ? undefined : `${fmtINR(value)} across all quotes`} />
       </StatGrid>
 
       <div className="table-wrap">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-1.5 overflow-x-auto -mx-0.5 px-0.5">
             <button type="button" className="chip" aria-pressed={statusFilter === 'all'} data-active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
-              All <span className="tabular-nums opacity-60">{quotes.length}</span>
+              All {!loading && <span className="tabular-nums opacity-60">{quotes.length}</span>}
             </button>
             {statusCounts.map(({ s, n }) => (
               <button key={s} type="button" className="chip" aria-pressed={statusFilter === s} data-active={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}>
                 <span className={`dot ${statusDot(s)}`} />
-                {STATUS_LABELS[s]} <span className="tabular-nums opacity-60">{n}</span>
+                {STATUS_LABELS[s]} {!loading && <span className="tabular-nums opacity-60">{n}</span>}
               </button>
             ))}
           </div>
