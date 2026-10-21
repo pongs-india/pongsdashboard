@@ -44,18 +44,24 @@ export function toPostgres(sql: string): string {
   return out
 }
 
-let _sql: ReturnType<typeof postgres> | null = null
+type Sql = ReturnType<typeof postgres>
+// Kept on globalThis so dev hot-reloads reuse one pool instead of leaking a new
+// one per edit (leaked pools leave stalled sessions holding table locks).
+const g = globalThis as unknown as { __pongsSql?: Sql }
 
-function connection() {
-  if (!_sql) {
+function connection(): Sql {
+  if (!g.__pongsSql) {
     const url = process.env.DATABASE_URL
     if (!url) throw new Error('DATABASE_URL env var not set')
-    _sql = postgres(url, {
+    g.__pongsSql = postgres(url, {
       // Supabase's transaction pooler (port 6543) does not support prepared statements.
       prepare: false,
       ssl: 'require',
       max: 5,
       idle_timeout: 20,
+      connect_timeout: 10,
+      // Recycle connections so the pooler never holds a stale one for long.
+      max_lifetime: 60 * 10,
       // "column already exists, skipping" from idempotent migrations is expected.
       onnotice: () => {},
       // COUNT/SUM over integers come back as int8/numeric; the app treats them as numbers.
@@ -65,7 +71,7 @@ function connection() {
       },
     })
   }
-  return _sql
+  return g.__pongsSql
 }
 
 const CREATE_TABLE = /^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)/i

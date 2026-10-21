@@ -1,16 +1,6 @@
-import {
-  initQuotesTable, initInventoryTables, initProjectsTables, initPermissionsTables,
-  initAuthTables, initClientsTable, initPaymentsTable, initFollowupsTable,
-} from '../src/lib/db'
+import { ensureSchema } from '../src/lib/db'
 
-// Creates (or migrates) every table the app uses. Idempotent.
+// Runs every migration now, regardless of the recorded schema version. Idempotent.
 export async function ensureTables() {
-  await initInventoryTables()
-  await initAuthTables()
-  await initQuotesTable()
-  await initProjectsTables()
-  await initPermissionsTables()
-  await initClientsTable()
-  await initPaymentsTable()
-  await initFollowupsTable()
+  await ensureSchema(true)
 }

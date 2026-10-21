@@ -9,9 +9,57 @@ function getClient() {
   return pgClient
 }
 
-let _quotesInit = false
-export async function initQuotesTable() {
-  if (_quotesInit) return
+// ---------------------------------------------------------------------------
+// SCHEMA
+// ---------------------------------------------------------------------------
+// Migrations are idempotent but expensive (dozens of DDL statements and
+// backfills, each a round trip, some taking table locks). They run once per
+// SCHEMA_VERSION, not on every cold start: each server instance does a single
+// version check and every init* call shares that one promise.
+// Bump SCHEMA_VERSION whenever a migrate* function changes.
+const SCHEMA_VERSION = 1
+
+let _schema: Promise<void> | null = null
+
+export function ensureSchema(force = false): Promise<void> {
+  if (force) _schema = null
+  _schema ??= (async () => {
+    const db = getClient()
+    if (!force) {
+      try {
+        const r = await db.execute('SELECT version FROM app_schema WHERE id = 1')
+        if (Number(r.rows[0]?.version ?? 0) >= SCHEMA_VERSION) return
+      } catch { /* table missing: fresh database */ }
+    }
+    await migrateInventoryTables()
+    await migrateAuthTables()
+    await migrateQuotesTable()
+    await migrateProjectsTables()
+    await migratePermissionsTables()
+    await migrateClientsTable()
+    await migratePaymentsTable()
+    await migrateFollowupsTable()
+    await db.execute('CREATE TABLE IF NOT EXISTS app_schema (id INTEGER PRIMARY KEY, version INTEGER NOT NULL, migrated_at TEXT)')
+    await db.execute(
+      `INSERT INTO app_schema (id, version, migrated_at) VALUES (1, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET version = excluded.version, migrated_at = excluded.migrated_at`,
+      [SCHEMA_VERSION, new Date().toISOString()],
+    )
+  })().catch(e => { _schema = null; throw e })
+  return _schema
+}
+
+// Kept as the public API every route already calls.
+export const initQuotesTable = () => ensureSchema()
+export const initInventoryTables = () => ensureSchema()
+export const initProjectsTables = () => ensureSchema()
+export const initPermissionsTables = () => ensureSchema()
+export const initAuthTables = () => ensureSchema()
+export const initClientsTable = () => ensureSchema()
+export const initPaymentsTable = () => ensureSchema()
+export const initFollowupsTable = () => ensureSchema()
+
+async function migrateQuotesTable() {
   const db = getClient()
   await db.execute(`
     CREATE TABLE IF NOT EXISTS pongs_quotes (
@@ -89,7 +137,6 @@ export async function initQuotesTable() {
   } catch (e) {
     console.error('grand_total backfill failed', e)
   }
-  _quotesInit = true
 }
 
 // Grand total from the quote's items using the same engine as the UI. Falls
@@ -268,15 +315,7 @@ export function getDbClient() {
   return getClient()
 }
 
-let _inventoryInit: Promise<void> | null = null
-export function initInventoryTables() {
-  // Memoised: this runs on nearly every request, and each DDL statement is a
-  // network round trip to Postgres. A failed attempt is retried next call.
-  _inventoryInit ??= createInventoryTables().catch(e => { _inventoryInit = null; throw e })
-  return _inventoryInit
-}
-
-async function createInventoryTables() {
+async function migrateInventoryTables() {
   const db = getClient()
   const tables = [
     `CREATE TABLE IF NOT EXISTS inv_products (
@@ -700,9 +739,7 @@ function rowToQuote(row: any): Record<string, unknown> {
   }
 }
 
-let _projectsInit = false
-export async function initProjectsTables() {
-  if (_projectsInit) return
+async function migrateProjectsTables() {
   const db = getClient()
   await db.execute(`CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, client_name TEXT NOT NULL,
@@ -724,7 +761,6 @@ export async function initProjectsTables() {
     note TEXT NOT NULL, status TEXT, created_by TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`)
-  _projectsInit = true
 }
 
 const DEFAULT_PERMISSIONS = [
@@ -735,9 +771,7 @@ const DEFAULT_PERMISSIONS = [
   { feature: 'users',      view: { admin:1, manager:1, sales:0, installer:0, viewer:0 }, edit: { admin:1, manager:0, sales:0, installer:0, viewer:0 } },
 ]
 
-let _permInit = false
-export async function initPermissionsTables() {
-  if (_permInit) return
+async function migratePermissionsTables() {
   const db = getClient()
   await db.execute(`CREATE TABLE IF NOT EXISTS role_permissions (
     id TEXT PRIMARY KEY, role TEXT NOT NULL, feature TEXT NOT NULL,
@@ -763,19 +797,16 @@ export async function initPermissionsTables() {
       }
     }
   }
-  _permInit = true
 }
 
 // ===========================================================================
 // AUTH + ACCESS REQUESTS
 // ===========================================================================
 
-let _authInit = false
-export async function initAuthTables() {
-  if (_authInit) return
-  // app_users is created by initInventoryTables — ensure it exists before we
-  // migrate/seed it (matters on a fresh database where auth runs first).
-  await initInventoryTables()
+async function migrateAuthTables() {
+  // app_users is created by the inventory migration — it must exist before we
+  // migrate/seed it (matters on a fresh database).
+  await migrateInventoryTables()
   const db = getClient()
   // Add role column to app_users if missing
   try { await db.execute(`ALTER TABLE app_users ADD COLUMN role TEXT DEFAULT 'viewer'`) } catch {}
@@ -829,7 +860,6 @@ export async function initAuthTables() {
     expires_at TEXT NOT NULL
   )`)
 
-  _authInit = true
 }
 
 // Seed permissions_json for any user that doesn't have it yet, derived from the
@@ -1007,9 +1037,7 @@ export async function dbGetSession(sessionId: string) {
 // ===========================================================================
 // CLIENTS MODULE
 // ===========================================================================
-let _clientsInit = false
-export async function initClientsTable() {
-  if (_clientsInit) return
+async function migrateClientsTable() {
   const db = getClient()
   await db.execute(`CREATE TABLE IF NOT EXISTS clients (
     id TEXT PRIMARY KEY,
@@ -1027,15 +1055,12 @@ export async function initClientsTable() {
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`)
-  _clientsInit = true
 }
 
 // ===========================================================================
 // PAYMENTS MODULE
 // ===========================================================================
-let _paymentsInit = false
-export async function initPaymentsTable() {
-  if (_paymentsInit) return
+async function migratePaymentsTable() {
   const db = getClient()
   await db.execute(`CREATE TABLE IF NOT EXISTS project_payments (
     id TEXT PRIMARY KEY,
@@ -1069,7 +1094,6 @@ export async function initPaymentsTable() {
     done_at TEXT,
     sort_order INTEGER DEFAULT 0
   )`)
-  _paymentsInit = true
 }
 
 export async function dbSeedProjectChecklist(projectId: string) {
@@ -1108,9 +1132,7 @@ export async function dbSeedProjectChecklist(projectId: string) {
 // ===========================================================================
 // FOLLOW-UPS
 // ===========================================================================
-let _followupsInit = false
-export async function initFollowupsTable() {
-  if (_followupsInit) return
+async function migrateFollowupsTable() {
   const db = getClient()
   await db.execute(`CREATE TABLE IF NOT EXISTS follow_ups (
     id TEXT PRIMARY KEY,
@@ -1122,7 +1144,6 @@ export async function initFollowupsTable() {
     done_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`)
-  _followupsInit = true
 }
 
 // The project created from a quote (via "Convert to project"), if any.
