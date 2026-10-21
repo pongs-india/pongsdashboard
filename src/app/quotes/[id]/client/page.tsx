@@ -105,7 +105,7 @@ export default async function ClientPage({ params }: { params: { id: string } })
 
       {/* ── PDF Pages ── */}
       <div className="pdf-mobile-outer -mx-4 sm:mx-0 rounded-lg bg-gray-100 border border-gray-200 py-8 px-4 sm:px-8 print:overflow-visible print:mx-0 print:p-0 print:border-0 print:bg-white">
-      <div id="quote-printable" className="print:w-full" style={{ fontFamily: "'Geist', system-ui, sans-serif" }}>
+      <div id="quote-printable" className="print:w-full" style={{ fontFamily: 'var(--font-sans), system-ui, sans-serif' }}>
 
         {/* ══════════════════════════════
             PAGE 1 — COVER

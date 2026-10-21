@@ -10,3 +10,6 @@ tsconfig.tsbuildinfo
 # local dev database & screenshots
 .local/
 .claude/
+
+# design screenshots (regenerate with replica/shoot.js)
+replica/screens*/
