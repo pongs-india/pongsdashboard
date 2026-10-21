@@ -9,6 +9,7 @@ import { fmtDate, fmtDateLong, monthShort, toDate } from '@/lib/format'
 import { PageHeader, Stat, StatGrid, StatusBadge, EmptyState, LoadingRows, PageLoading } from '@/components/ui'
 import { AttentionCard, GettingStarted, type SetupStep } from '@/components/Guidance'
 import { buildAttention } from '@/lib/attention'
+import { navigate } from '@/lib/navigate'
 
 type Row = Record<string, unknown>
 
@@ -135,17 +136,17 @@ export default function HomePage() {
       <StatGrid>
         {canQuotes && (
           <>
-            <Stat label="Open pipeline" value={quotes ? fmtINR(open.reduce((s, x) => s + totalOf(x), 0)) : '—'}
+            <Stat label="Open pipeline" value={quotes ? fmtINR(open.reduce((s, x) => s + totalOf(x), 0)) : null}
               hint={quotes ? `${open.length} ${open.length === 1 ? 'quote' : 'quotes'} in draft or sent` : ' '} href="/quotes" />
-            <Stat label="Won this month" value={quotes ? fmtINR(won.filter(x => x.date?.startsWith(month)).reduce((s, x) => s + totalOf(x), 0)) : '—'}
+            <Stat label="Won this month" value={quotes ? fmtINR(won.filter(x => x.date?.startsWith(month)).reduce((s, x) => s + totalOf(x), 0)) : null}
               hint={quotes ? (decided ? `${Math.round((won.length / decided) * 100)}% win rate overall` : 'No decisions yet') : ' '} tone={decided ? 'success' : 'neutral'} />
           </>
         )}
         {canProjects && (
           <>
-            <Stat label="Active projects" value={projects ? active.length : '—'}
+            <Stat label="Active projects" value={projects ? active.length : null}
               hint={projects ? fmtINR(active.reduce((s, x) => s + Number(x.contract_value ?? 0), 0)) + ' contracted' : ' '} href="/projects" />
-            <Stat label="Installs next 14 days" value={projects ? upcoming.length : '—'}
+            <Stat label="Installs next 14 days" value={projects ? upcoming.length : null}
               hint={projects ? (upcoming[0] ? `Next on ${fmtDate(String(upcoming[0].scheduled_date))}` : 'Nothing scheduled') : ' '} href="/projects/calendar" />
           </>
         )}
@@ -168,7 +169,7 @@ export default function HomePage() {
                   <table className="table table-hover">
                     <tbody>
                       {recent.map(x => (
-                        <tr key={x.id} className="cursor-pointer" onClick={() => { window.location.href = `/quotes/${x.id}/team` }}>
+                        <tr key={x.id} className="cursor-pointer" onClick={e => navigate(`/quotes/${x.id}/team`, e)}>
                           <td className="w-[96px]"><span className="mono text-xs text-gray-500">{x.quoteNumber}</span></td>
                           <td className="max-w-[280px]">
                             <div className="truncate font-medium text-gray-900">{x.clientName}</div>

@@ -4,6 +4,7 @@ import { Plus, CalendarClock } from 'lucide-react'
 import { PageHeader, Stat, StatGrid, EmptyState, statusDot } from '@/components/ui'
 import ProjectFormModal, { EMPTY_PROJECT, PROJECT_STATUS_LABELS, type Project } from '@/components/ProjectFormModal'
 import { fmtINR, fmtDate } from '@/lib/format'
+import { navigate } from '@/lib/navigate'
 
 const PIPELINE = ['scheduled', 'in_progress', 'completed', 'invoiced'] as const
 const PRIORITY_LABEL: Record<string, string> = { urgent: 'Urgent', high: 'High' }
@@ -106,7 +107,7 @@ export default function ProjectsDashboard() {
               <thead><tr><th>Date</th><th>Project</th><th className="hidden sm:table-cell">City</th><th>Team lead</th><th className="num">Value</th></tr></thead>
               <tbody>
                 {upcoming.map(p => (
-                  <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/projects/${p.id}` }}>
+                  <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/projects/${p.id}`, e)}>
                     <td className="whitespace-nowrap tabular-nums text-gray-900">{fmtDate(p.scheduled_date)}</td>
                     <td><div className="font-medium text-gray-900">{p.name}</div><div className="text-xs text-gray-500">{p.client_name}</div></td>
                     <td className="hidden sm:table-cell">{p.city || '—'}</td>

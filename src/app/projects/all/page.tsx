@@ -6,6 +6,7 @@ import ProjectFormModal, { EMPTY_PROJECT, PROJECT_STATUSES, PROJECT_STATUS_LABEL
 import { fmtINR, fmtDate } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
 import { useNewParam } from '@/lib/useNewParam'
+import { navigate } from '@/lib/navigate'
 
 const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'neutral'> = { urgent: 'danger', high: 'warning', normal: 'neutral', low: 'neutral' }
 
@@ -86,7 +87,7 @@ export default function AllProjects() {
                 {filtered.map(p => (
                   <tr key={p.id} className="group cursor-pointer" onClick={e => {
                     if ((e.target as HTMLElement).closest('button,a')) return
-                    window.location.href = `/projects/${p.id}`
+                    navigate(`/projects/${p.id}`)
                   }}>
                     <td className="max-w-[260px]">
                       <a href={`/projects/${p.id}`} className="block truncate font-medium text-gray-900 hover:underline">{p.name}</a>

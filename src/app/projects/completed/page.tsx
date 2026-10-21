@@ -5,6 +5,7 @@ import { PageHeader, Stat, StatGrid, EmptyState, LoadingRows, StatusBadge } from
 import { PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
 import { fmtINR, fmtDate, fmtMonth } from '@/lib/format'
 import { Select } from '@/components/controls'
+import { navigate } from '@/lib/navigate'
 
 type Project = { id: string; name: string; client_name: string; city: string; status: string; completion_date: string; ceiling_area_sqft: number; contract_value: number; team_lead: string }
 
@@ -44,7 +45,7 @@ export default function CompletedProjects() {
         <Stat label="Projects" value={loading ? '—' : filtered.length} hint={`${filtered.filter(p => p.status === 'invoiced').length} invoiced`} />
         <Stat label="Area installed" value={loading ? '—' : `${totalArea.toLocaleString('en-IN')} sqft`} />
         <Stat label="Contract value" value={loading ? '—' : fmtINR(totalValue)} />
-        <Stat label="Average per project" value={loading ? '—' : filtered.length ? fmtINR(Math.round(totalValue / filtered.length)) : '—'} />
+        <Stat label="Average per project" value={loading ? '—' : filtered.length ? fmtINR(Math.round(totalValue / filtered.length)) : null} />
       </StatGrid>
 
       <div className="table-wrap">
@@ -66,7 +67,7 @@ export default function CompletedProjects() {
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/projects/${p.id}` }}>
+                  <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/projects/${p.id}`, e)}>
                     <td><div className="font-medium text-gray-900">{p.name}</div><div className="text-xs text-gray-500">{p.client_name}</div></td>
                     <td className="hidden md:table-cell">{p.city || '—'}</td>
                     <td><StatusBadge status={p.status} label={PROJECT_STATUS_LABELS[p.status]} /></td>

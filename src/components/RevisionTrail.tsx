@@ -7,6 +7,7 @@ import { fmtINR, calculateQuote } from '@/lib/calculations'
 import { EmptyState, LoadingRows, StatusBadge } from '@/components/ui'
 import { fmtDate } from '@/lib/format'
 import { toast } from '@/components/feedback'
+import { navigate } from '@/lib/navigate'
 
 export default function RevisionTrail({ quoteId }: { quoteId: string }) {
   const [revs, setRevs] = useState<Quote[]>([])
@@ -32,7 +33,7 @@ export default function RevisionTrail({ quoteId }: { quoteId: string }) {
     setCreating(false)
     if (!res.ok) { toast('Could not create a revision', { tone: 'error' }); return }
     const created = await res.json()
-    window.location.href = `/quotes/${created.id}/edit`
+    navigate(`/quotes/${created.id}/edit`)
   }
 
   function total(q: Quote): number {

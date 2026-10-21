@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { ArrowUpRight, HardHat } from 'lucide-react'
 import { confirmDialog, toast } from '@/components/feedback'
+import { navigate } from '@/lib/navigate'
 
 // Converts a quote into a project. When a project already exists for the quote
 // we link to it instead of offering a second conversion.
@@ -25,7 +26,7 @@ export default function ConvertToProjectButton({ quoteId, projectId, primary = f
     const data = await r.json().catch(() => ({}))
     setConverting(false)
     if (data.project_id) {
-      window.location.href = `/projects/${data.project_id}`
+      navigate(`/projects/${data.project_id}`)
     } else {
       toast('Could not create the project', { tone: 'error', description: data.error })
     }

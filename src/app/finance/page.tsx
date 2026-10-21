@@ -5,6 +5,7 @@ import Gate from '@/components/Gate'
 import { PageHeader, Stat, StatGrid, EmptyState, LoadingRows, StatusBadge, SearchInput } from '@/components/ui'
 import { PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
 import { fmtINR } from '@/lib/format'
+import { navigate } from '@/lib/navigate'
 
 interface ProjectFinance {
   id: string; name: string; client_name: string; status: string
@@ -86,7 +87,7 @@ function FinanceInner() {
                   const pct = cv > 0 ? (profit / cv) * 100 : 0
                   const collected = cv > 0 ? Math.min(100, (paid / cv) * 100) : 0
                   return (
-                    <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/projects/${p.id}` }}>
+                    <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/projects/${p.id}`, e)}>
                       <td>
                         <a href={`/projects/${p.id}`} className="font-medium text-gray-900 hover:underline">{p.name}</a>
                         <div className="text-xs text-gray-500">{p.client_name}</div>

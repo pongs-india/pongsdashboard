@@ -12,6 +12,7 @@ import NotificationBell from '@/components/NotificationBell'
 import UserMenu from '@/components/UserMenu'
 import CommandMenu, { openCommandMenu } from '@/components/CommandMenu'
 import { useMe, can } from '@/lib/useMe'
+import { NAVIGATE_EVENT } from '@/lib/navigate'
 import type { ModuleName } from '@/lib/permissions'
 
 type NavChild = { href: string; label: string }
@@ -147,8 +148,13 @@ function useClientNavigation() {
       e.preventDefault()
       router.push(url.pathname + url.search + url.hash)
     }
+    function onNavigate(e: Event) {
+      e.preventDefault()
+      router.push(String((e as CustomEvent<string>).detail))
+    }
     document.addEventListener('click', onClick)
-    return () => document.removeEventListener('click', onClick)
+    window.addEventListener(NAVIGATE_EVENT, onNavigate)
+    return () => { document.removeEventListener('click', onClick); window.removeEventListener(NAVIGATE_EVENT, onNavigate) }
   }, [router])
 }
 

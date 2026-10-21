@@ -43,7 +43,8 @@ export function Stat({
   href,
 }: {
   label: ReactNode
-  value: ReactNode
+  /** null while loading: renders a skeleton instead of a placeholder dash */
+  value: ReactNode | null
   hint?: ReactNode
   icon?: LucideIcon
   tone?: 'neutral' | 'danger' | 'warning' | 'success'
@@ -56,7 +57,9 @@ export function Stat({
         <span className="stat-label truncate">{label}</span>
         {Icon && <Icon size={15} className="text-gray-400 shrink-0" strokeWidth={1.75} />}
       </div>
-      <div className="stat-value truncate">{value}</div>
+      {value === null || value === undefined
+        ? <div className="mt-3 mb-1 skeleton h-6 w-24" aria-label="Loading" />
+        : <div className="stat-value truncate">{value}</div>}
       {hint && <div className={`mt-1 text-xs ${hintTone} truncate`}>{hint}</div>}
     </>
   )

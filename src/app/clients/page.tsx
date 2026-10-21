@@ -7,6 +7,7 @@ import { PageHeader, EmptyState, LoadingRows, SearchInput, Badge, Avatar, Stat, 
 import ClientFormModal, { EMPTY_CLIENT, CLIENT_STATUSES, CLIENT_STATUS_LABEL, SOURCE_LABEL, type ClientForm } from '@/components/ClientFormModal'
 import { fmtINR } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
+import { navigate } from '@/lib/navigate'
 
 interface Client extends ClientForm {
   id: string
@@ -72,7 +73,7 @@ function ClientsPageInner() {
       <StatGrid cols={3}>
         <Stat label="Clients" value={loading ? '—' : clients.length} hint={`${clients.filter(c => c.status === 'vip').length} VIP`} />
         <Stat label="Quoted to clients" value={loading ? '—' : fmtINR(totalValue)} hint={`${withQuotes} client${withQuotes !== 1 ? 's' : ''} with quotes`} />
-        <Stat label="Largest account" value={loading ? '—' : top && Number(top.total_value) > 0 ? fmtINR(top.total_value) : '—'} hint={top && Number(top.total_value) > 0 ? (top.company || top.name) : 'No quotes yet'} />
+        <Stat label="Largest account" value={loading ? '—' : top && Number(top.total_value) > 0 ? fmtINR(top.total_value) : null} hint={top && Number(top.total_value) > 0 ? (top.company || top.name) : 'No quotes yet'} />
       </StatGrid>
 
       <div className="table-wrap">
@@ -111,7 +112,7 @@ function ClientsPageInner() {
                 {filtered.map(c => (
                   <tr key={c.id} className={`cursor-pointer ${deleting === c.id ? 'opacity-50' : ''}`} onClick={e => {
                     if ((e.target as HTMLElement).closest('button,a')) return
-                    window.location.href = `/clients/${c.id}`
+                    navigate(`/clients/${c.id}`)
                   }}>
                     <td>
                       <div className="flex items-center gap-3">

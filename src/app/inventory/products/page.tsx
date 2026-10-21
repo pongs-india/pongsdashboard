@@ -8,6 +8,7 @@ import { fmtINR } from '@/lib/format'
 import { useNewParam } from '@/lib/useNewParam'
 import { Select } from '@/components/controls'
 import { confirmDialog, toast } from '@/components/feedback'
+import { navigate } from '@/lib/navigate'
 
 interface Product {
   id: string; name: string; category: string; sku: string; unit: string
@@ -122,7 +123,7 @@ export default function ProductsPage() {
                   return (
                     <tr key={p.id} className="cursor-pointer" onClick={e => {
                       if ((e.target as HTMLElement).closest('button,a')) return
-                      window.location.href = `/inventory/products/${p.id}`
+                      navigate(`/inventory/products/${p.id}`)
                     }}>
                       <td className="max-w-[280px]">
                         <a href={`/inventory/products/${p.id}`} className="block truncate font-medium text-gray-900 hover:underline">{p.name}</a>

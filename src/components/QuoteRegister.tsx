@@ -12,6 +12,7 @@ import { PageHeader, Stat, StatGrid, EmptyState, LoadingRows, SearchInput, Statu
 import { fmtDate } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
 import { Menu, MenuItem, MenuSeparator } from '@/components/controls'
+import { navigate } from '@/lib/navigate'
 
 const TIER_LABEL: Record<string, string> = {
   dealer: 'Dealer', msp: 'MSP', specifiors: 'Specifier', manual: 'Manual', manual_custom: 'Custom',
@@ -124,7 +125,7 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
     setBusy(null)
     const created = await res.json().catch(() => null)
     if (!res.ok || !created?.id) { toast('Could not duplicate the quote', { tone: 'error' }); return }
-    window.location.href = `/quotes/${created.id}/edit`
+    navigate(`/quotes/${created.id}/edit`)
   }
 
   // Create a linked revision (never overwrites the original) then open it for editing.
@@ -136,7 +137,7 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
     setBusy(null)
     if (!res.ok) { toast('Could not create a revision', { tone: 'error' }); return }
     const created = await res.json()
-    window.location.href = `/quotes/${created.id}/edit`
+    navigate(`/quotes/${created.id}/edit`)
   }
 
   const companies = [{ id: 'all', label: 'All companies' }, ...listCompanies().map(c => ({ id: c.id, label: c.shortName }))]
@@ -262,7 +263,7 @@ function QuoteRow({ quote, busy, onDelete, onDuplicate, onRevise, onStatusChange
   return (
     <tr className={`cursor-pointer ${busy ? 'opacity-50' : ''}`} onClick={e => {
       if ((e.target as HTMLElement).closest('button,a')) return
-      window.location.href = href
+      navigate(href)
     }}>
       <td>
         <a href={href} className="mono text-xs font-medium text-gray-900 hover:underline">{quote.quoteNumber}</a>

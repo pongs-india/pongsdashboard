@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { PackageCheck } from 'lucide-react'
 import { PageHeader, EmptyState, LoadingRows, Badge, Stat, StatGrid } from '@/components/ui'
 import { fmtINR } from '@/lib/format'
+import { navigate } from '@/lib/navigate'
 
 type Product = { id: string; name: string; category: string; unit: string; current_stock: number; min_stock: number; cost_price: number; supplier_id: string }
 
@@ -59,7 +60,7 @@ export default function ReorderPage() {
                   const deficit = Math.max(0, p.min_stock - p.current_stock)
                   const isEmpty = p.current_stock <= 0
                   return (
-                    <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/inventory/products/${p.id}` }}>
+                    <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/inventory/products/${p.id}`, e)}>
                       <td className="font-medium text-gray-900">{p.name}</td>
                       <td className="hidden md:table-cell text-gray-600">{p.category || '—'}</td>
                       <td className="num whitespace-nowrap"><span className={isEmpty ? 'font-semibold text-red-700' : 'font-medium text-gray-900'}>{p.current_stock}</span> <span className="text-xs text-gray-500">{p.unit}</span></td>

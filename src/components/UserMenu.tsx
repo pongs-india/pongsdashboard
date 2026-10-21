@@ -5,7 +5,7 @@ import { ChevronsUpDown, KeyRound, LogOut, Inbox, ShieldCheck } from 'lucide-rea
 import { Avatar, Badge, Field, Modal } from '@/components/ui'
 
 export default function UserMenu() {
-  const { me: user } = useMe()
+  const { me: user, loading } = useMe()
   const [open, setOpen] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -24,6 +24,14 @@ export default function UserMenu() {
     window.location.assign('/login')
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2.5 px-2 py-1.5" aria-hidden>
+        <span className="skeleton h-7 w-7 !rounded-full" />
+        <span className="flex-1 space-y-1.5"><span className="skeleton block h-2.5 w-24" /><span className="skeleton block h-2 w-32" /></span>
+      </div>
+    )
+  }
   if (!user) {
     return <a href="/login" className="btn-secondary w-full">Sign in</a>
   }

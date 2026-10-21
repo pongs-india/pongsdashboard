@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { AlertTriangle, Package, ShoppingCart } from 'lucide-react'
 import { PageHeader, Stat, StatGrid, EmptyState, PageLoading } from '@/components/ui'
-import { ChartCard, ChartEmpty, ChartTooltip, CHART_PRIMARY, AXIS_TICK, GRID_STROKE, BAR_MAX, BAR_RADIUS, compactINR, fullINR } from '@/components/charts'
+import { ChartCard, ChartEmpty, ChartTooltip, CHART_PRIMARY, AXIS_TICK, GRID_STROKE, CURSOR_FILL, BAR_MAX, BAR_RADIUS, compactINR, fullINR } from '@/components/charts'
 import { fmtINR, fmtMonth } from '@/lib/format'
+import { navigate } from '@/lib/navigate'
 
 interface Stats {
   purchases: {
@@ -88,7 +89,7 @@ export default function InventoryDashboard() {
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} />
                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} width={52} />
-                <Tooltip cursor={{ fill: '#f1f1ef' }} content={<ChartTooltip />} />
+                <Tooltip cursor={{ fill: CURSOR_FILL }} content={<ChartTooltip />} />
                 <Bar dataKey="amount" name="Spend" fill={CHART_PRIMARY} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
               </BarChart>
             </ResponsiveContainer>
@@ -134,7 +135,7 @@ export default function InventoryDashboard() {
                 {low.slice(0, 8).map(p => {
                   const pct = p.min_stock > 0 ? Math.min(100, (p.current_stock / p.min_stock) * 100) : 0
                   return (
-                    <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/inventory/products/${p.id}` }}>
+                    <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/inventory/products/${p.id}`, e)}>
                       <td className="font-medium text-gray-900"><span className="inline-flex items-center gap-2"><AlertTriangle size={14} className={p.current_stock <= 0 ? 'text-red-600' : 'text-amber-600'} />{p.name}</span></td>
                       <td className="num">{p.current_stock}</td>
                       <td className="num text-gray-500">{p.min_stock}</td>

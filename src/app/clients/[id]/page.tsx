@@ -6,6 +6,7 @@ import { Badge, StatusBadge, EmptyState, PageLoading, Avatar } from '@/component
 import ClientFormModal, { CLIENT_STATUS_LABEL, SOURCE_LABEL, type ClientForm } from '@/components/ClientFormModal'
 import { PROJECT_STATUS_LABELS } from '@/components/ProjectFormModal'
 import { fmtINR, fmtDate } from '@/lib/format'
+import { navigate } from '@/lib/navigate'
 
 interface Client extends ClientForm { id: string; created_at: string }
 // Shapes returned by GET /api/clients/[id]
@@ -98,7 +99,7 @@ export default function ClientDetailPage() {
                   <thead><tr><th>Quote</th><th className="hidden sm:table-cell">Project</th><th className="hidden md:table-cell">Date</th><th>Status</th><th className="num">Amount</th></tr></thead>
                   <tbody>
                     {quotes.map(q => (
-                      <tr key={q.id} className="cursor-pointer" onClick={() => { window.location.href = `/quotes/${q.id}/team` }}>
+                      <tr key={q.id} className="cursor-pointer" onClick={e => navigate(`/quotes/${q.id}/team`, e)}>
                         <td><a href={`/quotes/${q.id}/team`} className="mono text-xs font-medium text-gray-900 hover:underline">{q.quote_number}</a></td>
                         <td className="hidden sm:table-cell">{q.project_name || '—'}</td>
                         <td className="hidden md:table-cell whitespace-nowrap tabular-nums">{fmtDate(q.date)}</td>
@@ -125,7 +126,7 @@ export default function ClientDetailPage() {
                   <thead><tr><th>Project</th><th className="hidden md:table-cell">Scheduled</th><th>Status</th><th className="num hidden sm:table-cell">Area</th><th className="num">Value</th></tr></thead>
                   <tbody>
                     {projects.map(p => (
-                      <tr key={p.id} className="cursor-pointer" onClick={() => { window.location.href = `/projects/${p.id}` }}>
+                      <tr key={p.id} className="cursor-pointer" onClick={e => navigate(`/projects/${p.id}`, e)}>
                         <td><a href={`/projects/${p.id}`} className="font-medium text-gray-900 hover:underline">{p.name}</a></td>
                         <td className="hidden md:table-cell whitespace-nowrap tabular-nums">{fmtDate(p.scheduled_date)}</td>
                         <td><StatusBadge status={p.status} label={PROJECT_STATUS_LABELS[p.status]} /></td>

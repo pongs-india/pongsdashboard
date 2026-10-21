@@ -6,6 +6,7 @@ import { Check, FileDown, GitBranch, Send, X } from 'lucide-react'
 import { NextStep, type StepState } from '@/components/ui'
 import ConvertToProjectButton from '@/components/ConvertToProjectButton'
 import { confirmDialog, toast } from '@/components/feedback'
+import { navigate } from '@/lib/navigate'
 
 // Walks a quote through its lifecycle: draft, sent, decided, project. The
 // panel always names the single next action and performs it in one click.
@@ -42,7 +43,7 @@ export default function QuoteNextStep({
     const created = await res.json().catch(() => null)
     setBusy(null)
     if (!res.ok || !created?.id) { toast('Could not create a revision', { tone: 'error' }); return }
-    window.location.href = `/quotes/${created.id}/edit`
+    navigate(`/quotes/${created.id}/edit`)
   }
 
   const s = ['sent', 'approved', 'rejected'].includes(status) ? status : 'draft'

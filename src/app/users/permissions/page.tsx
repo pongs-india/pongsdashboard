@@ -5,6 +5,7 @@ import { Info, ShieldCheck } from 'lucide-react'
 import { PageHeader, Avatar, Badge, LoadingRows, EmptyState, SearchInput } from '@/components/ui'
 import { MODULES, MODULE_LABELS, parsePermissions } from '@/lib/permissions'
 import { accessLevel, type AccessLevel } from '@/lib/access'
+import { navigate } from '@/lib/navigate'
 
 interface User { id: string; name: string; email: string; role: string; access_level: string; status: string; permissions_json?: string }
 
@@ -63,7 +64,7 @@ function AccessOverview() {
                   const admin = (u.role ?? u.access_level) === 'admin'
                   const perms = parsePermissions(u.permissions_json)
                   return (
-                    <tr key={u.id} className="cursor-pointer" onClick={() => { window.location.href = `/users/${u.id}` }}>
+                    <tr key={u.id} className="cursor-pointer" onClick={e => navigate(`/users/${u.id}`, e)}>
                       <td>
                         <div className="flex items-center gap-3">
                           <Avatar name={u.name} size={28} />

@@ -10,6 +10,7 @@ import {
   MODULES, MODULE_LABELS, ACTIONS, emptyPermissions,
   parsePermissions, type UserPermissions, type ModuleName, type ActionName,
 } from '@/lib/permissions'
+import { navigate } from '@/lib/navigate'
 
 interface User {
   id: string; name: string; email: string; phone: string; city: string
@@ -174,7 +175,7 @@ function AllUsersInner() {
                   return (
                     <tr key={u.id} className="cursor-pointer" onClick={e => {
                       if ((e.target as HTMLElement).closest('button,a')) return
-                      window.location.href = `/users/${u.id}`
+                      navigate(`/users/${u.id}`)
                     }}>
                       <td>
                         <div className="flex items-center gap-3">
