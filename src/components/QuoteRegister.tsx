@@ -13,6 +13,8 @@ import { fmtDate } from '@/lib/format'
 import { confirmDialog, toast } from '@/components/feedback'
 import { Menu, MenuItem, MenuSeparator } from '@/components/controls'
 import { navigate } from '@/lib/navigate'
+import { useMe } from '@/lib/useMe'
+import { useSort, SortHeader, usePagination, Pagination, downloadCsv, ExportButton, useUrlState } from '@/components/table'
 
 const TIER_LABEL: Record<string, string> = {
   dealer: 'Dealer', msp: 'MSP', specifiors: 'Specifier', manual: 'Manual', manual_custom: 'Custom',
@@ -35,18 +37,15 @@ function totalOf(q: Quote) {
 // list already contains only their own quotes.
 export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'dashboard' | 'quotes' }) {
   const [quotes, setQuotes] = useState<Quote[]>([])
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useUrlState('q', '')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all')
-  const [companyFilter, setCompanyFilter] = useState<string>('all')
-  const [me, setMe] = useState<{ name?: string; role?: string; email?: string; isAdmin?: boolean } | null>(null)
+  const [statusParam, setStatusFilter] = useUrlState('status', 'all')
+  const statusFilter = (STATUSES as string[]).includes(statusParam) ? statusParam as QuoteStatus : 'all'
+  const [companyFilter, setCompanyFilter] = useUrlState('company', 'all')
+  const { me } = useMe()
   const isAdmin = !!me?.isAdmin
-
-  useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setMe(d)).catch(() => {})
-  }, [])
 
   const fetchQuotes = useCallback(async (q = '', company = 'all') => {
     setLoading(true)
@@ -84,16 +83,38 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
 
   const statusCounts = STATUSES.map(s => ({ s, n: quotes.filter(q => getStatus(q) === s).length }))
   const filtered = statusFilter === 'all' ? quotes : quotes.filter(q => getStatus(q) === statusFilter)
+  const { sorted, sort, toggle } = useSort(filtered, {
+    number: q => q.quoteNumber,
+    client: q => q.clientName,
+    date: q => q.date,
+    status: q => STATUSES.indexOf(getStatus(q)),
+    amount: q => totalOf(q),
+  }, { key: 'date', dir: 'desc' })
+  const pager = usePagination(sorted, 25)
 
+  function exportCsv() {
+    downloadCsv('pongs-quotes', ['Quote', 'Revision', 'Client', 'Project', 'Location', 'Company', 'Pricing', 'Date', 'Valid until', 'Status', 'Amount (INR)'],
+      sorted.map(q => [q.quoteNumber, Number(q.revision ?? 0) || '', q.clientName, q.projectName, q.location, q.company ?? 'STC',
+        TIER_LABEL[q.priceTier] ?? q.priceTier, q.date, q.validUntil, STATUS_LABELS[getStatus(q)], Math.round(totalOf(q))]))
+  }
+
+  // Optimistic, with rollback: the badge changes at once and reverts if the save fails.
   async function updateStatus(id: string, status: QuoteStatus) {
     const quote = quotes.find(q => q.id === id)
     if (!quote) return
+    const previous = getStatus(quote)
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, status } as Quote : q))
-    await fetch(`/api/quotes/${id}`, {
+    const res = await fetch(`/api/quotes/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...quote, status }),
-    })
+    }).catch(() => null)
+    if (!res?.ok) {
+      setQuotes(prev => prev.map(q => q.id === id ? { ...q, status: previous } as Quote : q))
+      toast('Could not change the status. Please try again.', { tone: 'error' })
+      return
+    }
+    toast(`${quote.quoteNumber} marked ${STATUS_LABELS[status].toLowerCase()}`)
   }
 
   async function deleteQuote(id: string, name: string) {
@@ -158,33 +179,34 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
         description={description}
         actions={
           <>
-            <div className="segmented" role="tablist" aria-label="Company">
+            <div className="segmented" role="group" aria-label="Company">
               {companies.map(c => (
-                <button key={c.id} data-active={companyFilter === c.id} onClick={() => setCompanyFilter(c.id)}>{c.label}</button>
+                <button key={c.id} type="button" aria-pressed={companyFilter === c.id} data-active={companyFilter === c.id} onClick={() => setCompanyFilter(c.id)}>{c.label}</button>
               ))}
             </div>
+            <ExportButton onClick={exportCsv} disabled={loading || sorted.length === 0} />
             <a href="/quotes/new" className="btn-primary"><Plus size={15} strokeWidth={2.25} /> New quote</a>
           </>
         }
       />
 
       <StatGrid>
-        <Stat label={isAdmin ? 'Total quotes' : 'My quotes'} value={loading ? '—' : quotes.length}
+        <Stat label={isAdmin ? 'Total quotes' : 'My quotes'} value={loading ? null : quotes.length}
           hint={loading ? ' ' : `${thisMonthQuotes.length} created this month`} />
-        <Stat label="Open pipeline" value={loading ? '—' : fmtINR(openValue)} hint="Draft and sent" />
-        <Stat label="Won" value={loading ? '—' : fmtINR(approvedValue)}
+        <Stat label="Open pipeline" value={loading ? null : fmtINR(openValue)} hint="Draft and sent" />
+        <Stat label="Won" value={loading ? null : fmtINR(approvedValue)}
           hint={decided ? `${conversionRate}% win rate on decided quotes` : 'No decisions yet'} tone={decided ? 'success' : 'neutral'} />
-        <Stat label="Quoted this month" value={loading ? '—' : fmtINR(thisMonthValue)} hint={`${fmtINR(value)} across all quotes`} />
+        <Stat label="Quoted this month" value={loading ? null : fmtINR(thisMonthValue)} hint={`${fmtINR(value)} across all quotes`} />
       </StatGrid>
 
       <div className="table-wrap">
         <div className="flex flex-col gap-3 border-b border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-1.5 overflow-x-auto -mx-0.5 px-0.5">
-            <button className="chip" data-active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
+            <button type="button" className="chip" aria-pressed={statusFilter === 'all'} data-active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
               All <span className="tabular-nums opacity-60">{quotes.length}</span>
             </button>
             {statusCounts.map(({ s, n }) => (
-              <button key={s} className="chip" data-active={statusFilter === s} onClick={() => setStatusFilter(prev => prev === s ? 'all' : s)}>
+              <button key={s} type="button" className="chip" aria-pressed={statusFilter === s} data-active={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}>
                 <span className={`dot ${statusDot(s)}`} />
                 {STATUS_LABELS[s]} <span className="tabular-nums opacity-60">{n}</span>
               </button>
@@ -213,17 +235,17 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
             <table className="table table-hover">
               <thead>
                 <tr>
-                  <th className="w-[110px]">Quote</th>
-                  <th>Client and project</th>
+                  <SortHeader label="Quote" sortKey="number" sort={sort} onSort={toggle} className="w-[110px]" />
+                  <SortHeader label="Client and project" sortKey="client" sort={sort} onSort={toggle} />
                   <th className="hidden md:table-cell">Pricing</th>
-                  <th className="hidden lg:table-cell">Date</th>
-                  <th>Status</th>
-                  <th className="num">Amount</th>
+                  <SortHeader label="Date" sortKey="date" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
+                  <SortHeader label="Status" sortKey="status" sort={sort} onSort={toggle} />
+                  <SortHeader label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />
                   <th className="w-12"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(quote => (
+                {pager.pageRows.map(quote => (
                   <QuoteRow key={quote.id} quote={quote} busy={busy === quote.id}
                     onDelete={() => deleteQuote(quote.id, quote.clientName)}
                     onDuplicate={() => duplicateQuote(quote)}
@@ -235,10 +257,7 @@ export default function QuoteRegister({ variant = 'dashboard' }: { variant?: 'da
           </div>
         )}
         {!loading && filtered.length > 0 && (
-          <div className="table-footer">
-            <span>{filtered.length} of {quotes.length} quotes</span>
-            <span className="tabular-nums">Total {fmtINR(filtered.reduce((s, q) => s + totalOf(q), 0))}</span>
-          </div>
+          <Pagination {...pager} noun="quotes" summary={`Total ${fmtINR(filtered.reduce((s, q) => s + totalOf(q), 0))}`} />
         )}
       </div>
     </div>
@@ -261,9 +280,9 @@ function QuoteRow({ quote, busy, onDelete, onDuplicate, onRevise, onStatusChange
   const href = `/quotes/${quote.id}/team`
 
   return (
-    <tr className={`cursor-pointer ${busy ? 'opacity-50' : ''}`} onClick={e => {
-      if ((e.target as HTMLElement).closest('button,a')) return
-      navigate(href)
+    <tr className={`cursor-pointer ${busy ? 'opacity-50' : ''}`} aria-busy={busy || undefined} onClick={e => {
+      if ((e.target as HTMLElement).closest('button,a,[role=menu]')) return
+      navigate(href, e)
     }}>
       <td>
         <a href={href} className="mono text-xs font-medium text-gray-900 hover:underline">{quote.quoteNumber}</a>
@@ -277,7 +296,7 @@ function QuoteRow({ quote, busy, onDelete, onDuplicate, onRevise, onStatusChange
       </td>
       <td className="hidden md:table-cell">
         <span className="text-xs text-gray-700">{quote.company ?? 'STC'}</span>
-        <span className="text-xs text-gray-400"> · {TIER_LABEL[quote.priceTier] ?? quote.priceTier}</span>
+        <span className="text-xs text-gray-500"> · {TIER_LABEL[quote.priceTier] ?? quote.priceTier}</span>
       </td>
       <td className="hidden lg:table-cell text-xs text-gray-600 tabular-nums whitespace-nowrap">{date}</td>
       <td>
