@@ -10,18 +10,16 @@ export async function GET() {
   await initPaymentsTable()
   const db = getDbClient()
 
-  const projects = await db.execute('SELECT id, name, client_name, status, contract_value, created_at FROM projects ORDER BY created_at DESC')
-
-  const result = await Promise.all(projects.rows.map(async (p) => {
-    const pid = String(p.id)
-    const payments = await db.execute('SELECT COALESCE(SUM(amount),0) as total FROM project_payments WHERE project_id = ?', [pid])
-    const expenses = await db.execute('SELECT COALESCE(SUM(amount),0) as total FROM project_expenses WHERE project_id = ?', [pid])
-    return {
-      ...p,
-      total_paid: Number((payments.rows[0] as Record<string, unknown>).total ?? 0),
-      total_expenses: Number((expenses.rows[0] as Record<string, unknown>).total ?? 0),
-    }
-  }))
+  // One query instead of two per project: totals are aggregated in Postgres.
+  const r = await db.execute(`
+    SELECT p.id, p.name, p.client_name, p.status, p.contract_value, p.created_at,
+           COALESCE(pay.total, 0) AS total_paid,
+           COALESCE(exp.total, 0) AS total_expenses
+    FROM projects p
+    LEFT JOIN (SELECT project_id, SUM(amount) AS total FROM project_payments GROUP BY project_id) pay ON pay.project_id = p.id
+    LEFT JOIN (SELECT project_id, SUM(amount) AS total FROM project_expenses GROUP BY project_id) exp ON exp.project_id = p.id
+    ORDER BY p.created_at DESC`)
+  const result = r.rows.map(p => ({ ...p, total_paid: Number(p.total_paid ?? 0), total_expenses: Number(p.total_expenses ?? 0) }))
 
   return NextResponse.json(result)
 }
