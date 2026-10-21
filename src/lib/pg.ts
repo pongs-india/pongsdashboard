@@ -57,7 +57,7 @@ function connection(): Sql {
       // Supabase's transaction pooler (port 6543) does not support prepared statements.
       prepare: false,
       ssl: 'require',
-      max: 5,
+      max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
       // Recycle connections so the pooler never holds a stale one for long.
@@ -76,16 +76,48 @@ function connection(): Sql {
 
 const CREATE_TABLE = /^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)/i
 
+// A query that has not answered in this long is stuck (stalled pooler
+// session, dropped socket). The pool is thrown away and rebuilt so one bad
+// connection can never hang every later request.
+const QUERY_TIMEOUT_MS = 20_000
+
+function resetPool() {
+  const old = g.__pongsSql
+  g.__pongsSql = undefined
+  old?.end({ timeout: 1 }).catch(() => {})
+}
+
 export const db: DbClient = {
   async execute(sql, args = []) {
     const conn = connection()
     const params = args.map(a => (a === undefined ? null : typeof a === 'boolean' ? (a ? 1 : 0) : a))
-    const result = await conn.unsafe(toPostgres(sql), params as (string | number | null)[])
-    // Supabase exposes the public schema over its REST API. The app talks to
-    // Postgres directly as the owner (which bypasses RLS), so every table gets
-    // RLS switched on with no policies: unreachable through the anon key.
-    const created = CREATE_TABLE.exec(sql)
-    if (created) await conn.unsafe(`ALTER TABLE ${created[1]} ENABLE ROW LEVEL SECURITY`)
-    return { rows: Array.from(result) as Row[], rowsAffected: result.count ?? 0 }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        resetPool()
+        reject(new Error(`Database query timed out after ${QUERY_TIMEOUT_MS / 1000}s`))
+      }, QUERY_TIMEOUT_MS)
+    })
+    // One query per connection at a time: no pipelining through the
+    // transaction pooler, which can mis-route pipelined statements.
+    const run = (async () => {
+      const reserved = await conn.reserve()
+      try {
+        const result = await reserved.unsafe(toPostgres(sql), params as (string | number | null)[])
+        // Supabase exposes the public schema over its REST API. The app talks to
+        // Postgres directly as the owner (which bypasses RLS), so every table gets
+        // RLS switched on with no policies: unreachable through the anon key.
+        const created = CREATE_TABLE.exec(sql)
+        if (created) await reserved.unsafe(`ALTER TABLE ${created[1]} ENABLE ROW LEVEL SECURITY`)
+        return { rows: Array.from(result) as Row[], rowsAffected: result.count ?? 0 }
+      } finally {
+        reserved.release()
+      }
+    })()
+    try {
+      return await Promise.race([run, timeout])
+    } finally {
+      clearTimeout(timer)
+    }
   },
 }
